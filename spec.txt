@@ -1,0 +1,107 @@
+tpt-perception Design Specification (spec.txt)
+1. Overview
+Name: tpt-perception
+Description: A pure-Rust, AI-native 3D spatial perception and sensor fusion library. It provides point cloud processing, SLAM (Simultaneous Localization and Mapping), multi-sensor fusion, feature extraction, and spatial registration without C/C++ FFI or external dependencies.
+License: MIT (all dependencies must be MIT or compatible; no Apache-2.0-only crates).
+Core Philosophy: Unit-safe, no_std + alloc compatible at the core, differentiable for learning-based perception, and mathematically rigorous via native Rust verification tooling.
+2. Design Principles
+Zero External Dependencies: No PCL (Point Cloud Library), no Open3D, no OpenCV FFI. All algorithms (ICP, NDT, voxelization, feature detection) implemented from scratch in pure Rust, leveraging tpt-math and tpt-dsp.
+Strict Licensing: No Apache-2.0-only dependencies. Workspace uses only MIT, MIT/Apache-2.0 dual, or in-house crates.
+Type-State & Spatial Safety: Compile-time prevention of coordinate frame mismatches (e.g., adding a point in "world" frame to a point in "sensor" frame is a compile error) using Rust's type system and phantom type parameters.
+Native Formal Verification: Safety and geometric invariants enforced via:
+Kani Rust Verifier: For bounded model checking of critical spatial algorithms (e.g., proving ICP convergence bounds, voxel grid indexing safety).
+Property-Based Testing (proptest): For statistical verification of geometric invariants (e.g., "rigid body transformations preserve distances", "point-to-plane ICP reduces residual error").
+Mathematical Contracts: Documented and tested geometric constraints, enforced via runtime assertions in debug builds and Kani proofs in CI.
+3. Workspace Layout
+
+tpt-perception/
+├── Cargo.toml                 # Workspace manifest (strict dependency linting)
+├── crates/
+│   ├── tpt-percept-core/      # Foundation: 3D geometry, coordinate frames, transforms, unit-safe types
+│   ├── tpt-percept-cloud/     # Point cloud processing: voxelization, downsampling, filtering, spatial indexing
+│   ├── tpt-percept-features/  # Feature extraction: corners, edges, planes, normals, FPFH/SHOT descriptors
+│   ├── tpt-percept-register/  # Point cloud registration: ICP, NDT, feature-based matching, RANSAC
+│   ├── tpt-percept-slam/      # SLAM: visual odometry, LiDAR odometry, loop closure, pose graph optimization
+│   ├── tpt-percept-fusion/    # Multi-sensor fusion: LiDAR+camera+IMU+radar, temporal alignment, EKF/UKF integration
+│   ├── tpt-percept-map/       # Spatial mapping: occupancy grids, voxel maps, TSDF, signed distance fields
+│   ├── tpt-percept-verify/    # Verification harnesses: Kani proofs, proptest strategies, geometric invariant checks
+│   └── tpt-perception/        # Feature-gated umbrella crate re-exporting all above
+├── spec.txt                   # This document
+└── todo.md                    # Phased build tracking
+
+4. Crate Specifications
+tpt-percept-core
+Purpose: The foundational layer. Defines 3D geometry primitives, coordinate frame types, and rigid body transformations.
+Dependencies: tpt-math (internal, MIT).
+Key Features:
+Phantom-typed coordinate frames (e.g., Point3D<WorldFrame>, Point3D<SensorFrame>).
+Rigid body transformations (Isometry3, Twist3) with const-generic dimensionality.
+Unit-safe physical quantities (meters, radians, seconds) via tpt-math-units.
+no_std + alloc compatible.
+tpt-percept-cloud
+Purpose: Efficient point cloud data structures and processing algorithms.
+Key Features:
+Voxel grid hashing (sparse voxelization) for memory-efficient large-scale point clouds.
+Statistical outlier removal, radius filtering, and pass-through filtering.
+Spatial indexing: k-d trees, octrees, and R-trees for fast nearest-neighbor queries.
+Streaming point cloud processing for real-time LiDAR data.
+tpt-percept-features
+Purpose: Geometric feature extraction and descriptor computation.
+Key Features:
+Local surface normals, curvature, and principal component analysis (PCA).
+Feature detection: Harris corners (3D), edge detection, plane segmentation (RANSAC).
+Descriptors: FPFH (Fast Point Feature Histograms), SHOT, and custom learned descriptors (AI-native hooks).
+tpt-percept-register
+Purpose: Point cloud registration and alignment algorithms.
+Key Features:
+ICP (Iterative Closest Point): point-to-point and point-to-plane variants with convergence guarantees.
+NDT (Normal Distributions Transform): probabilistic registration for robust alignment.
+Feature-based registration: descriptor matching + RANSAC for initial pose estimation.
+Global registration: branch-and-bound, 3D Hough transforms for loop closure.
+tpt-percept-slam
+Purpose: Simultaneous Localization and Mapping for autonomous navigation.
+Key Features:
+Visual odometry: feature tracking, pose estimation from monocular/stereo cameras.
+LiDAR odometry: scan matching, incremental map building.
+Loop closure detection: place recognition via learned or hand-crafted descriptors.
+Pose graph optimization: sparse nonlinear least-squares (via tpt-systems-optimisation).
+tpt-percept-fusion
+Purpose: Multi-sensor fusion for robust state estimation.
+Key Features:
+Temporal alignment: timestamp interpolation, latency compensation.
+Sensor fusion: EKF/UKF integration with tpt-control for LiDAR+camera+IMU+radar.
+Extrinsic calibration: automatic sensor-to-sensor transform estimation.
+Uncertainty propagation: covariance intersection, robust fusion under sensor failure.
+tpt-percept-map
+Purpose: Spatial representation and mapping for navigation and planning.
+Key Features:
+Occupancy grids: 2D/3D probabilistic maps (log-odds representation).
+Voxel maps: TSDF (Truncated Signed Distance Function) for surface reconstruction.
+Signed distance fields: for collision checking and trajectory optimization.
+Semantic maps: labeled point clouds for object recognition and scene understanding.
+tpt-percept-verify
+Purpose: Mathematical verification of geometric algorithms and spatial invariants.
+Key Features:
+proptest strategies for generating valid point clouds, transformations, and noise profiles.
+Kani Rust Verifier harnesses to prove absence of panics (e.g., division by zero in normal computation, out-of-bounds voxel indexing).
+Helper traits for defining and checking geometric invariants (e.g., "rigid transforms preserve distances", "ICP residual decreases monotonically").
+5. Integration & Synergies
+tpt-control: tpt-percept-fusion feeds state estimates (position, velocity, orientation) into tpt-control for closed-loop control. tpt-control provides motion models for SLAM prediction steps.
+tpt-robotics / tpt-flight-control: High-level consumers. They define the sensor suite and navigation goals, then call tpt-perception for localization and mapping.
+tpt-dsp: Provides native Rust FFT and filtering primitives used by tpt-percept-fusion (sensor pre-filtering) and tpt-percept-slam (frequency-domain feature extraction).
+tpt-gis: Provides geospatial coordinate transformations (WGS84, UTM) for large-scale outdoor SLAM and multi-robot coordination.
+AI-Native Agents: Feature descriptors and cost functions expose automatic differentiation hooks, allowing tpt-eve / tpt-anima agents to perform learned perception or RL-based navigation.
+6. Phased Rollout (todo.md Alignment)
+Phase 0: Foundation & Verification Setup (Weeks 1-2)
+Scaffold workspace with strict dependency linting to block Apache-only dependencies.
+Implement tpt-percept-core (3D geometry, coordinate frames, rigid transforms).
+Set up Kani and proptest harnesses in tpt-percept-verify for basic geometric operations.
+Phase 1: Point Cloud Processing (Weeks 3-5)
+Implement tpt-percept-cloud (voxelization, filtering, k-d trees).
+Build tpt-percept-features (normals, plane segmentation, FPFH descriptors).
+Integration test: plane detection on synthetic point clouds, verified via proptest.
+Phase 2: Registration & SLAM (Weeks 6-8)
+Build tpt-percept-register (ICP, NDT, RANSAC).
+Develop tpt-percept-slam (LiDAR odometry, pose graph optimization).
+Implement tpt-percept-fusion (EKF/UKF integration with tpt-control).
+Verify ICP convergence and SLAM consistency via Kani proofs.
