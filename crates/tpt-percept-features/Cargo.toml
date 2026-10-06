@@ -1,0 +1,38 @@
+[package]
+name = "tpt-percept-features"
+description = "Geometric feature extraction for tpt-perception: surface normals, curvature, PCA, Harris 3D corners, edge detection, RANSAC plane segmentation, FPFH and SHOT descriptors, learned-descriptor hooks. no_std + alloc."
+readme = "README.md"
+keywords = ["features", "normals", "fpfh", "shot", "no-std"]
+categories = ["science", "algorithms", "no-std"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[dependencies]
+tpt-percept-core = { workspace = true }
+tpt-percept-cloud = { workspace = true }
+tpt-math-numeric = { workspace = true }
+tpt-math-linalg-fixed = { workspace = true }
+
+[features]
+default = ["std"]
+alloc = [
+    "tpt-percept-core/alloc",
+    "tpt-percept-cloud/alloc",
+    "tpt-math-numeric/alloc",
+    "tpt-math-linalg-fixed/alloc",
+]
+std = [
+    "alloc",
+    "tpt-percept-core/std",
+    "tpt-percept-cloud/std",
+    "tpt-math-numeric/std",
+    "tpt-math-linalg-fixed/std",
+]
+
+[lints]
+workspace = true

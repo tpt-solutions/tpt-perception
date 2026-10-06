@@ -1,0 +1,28 @@
+[package]
+name = "tpt-percept-core"
+description = "Foundation for tpt-perception: frame-typed 3D geometry, rigid body transforms, twists, and small dense linear algebra. no_std + alloc."
+readme = "README.md"
+keywords = ["perception", "geometry", "robotics", "lidar", "no-std"]
+categories = ["science", "algorithms", "no-std"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[dependencies]
+tpt-math-geometry = { workspace = true }
+tpt-math-linalg-fixed = { workspace = true }
+tpt-math-numeric = { workspace = true }
+tpt-math-units = { workspace = true }
+
+[features]
+default = ["std"]
+# Dynamic collections only; the geometric core itself is heap-free.
+alloc = ["tpt-math-geometry/alloc", "tpt-math-linalg-fixed/alloc", "tpt-math-numeric/alloc", "tpt-math-units/alloc"]
+std = ["alloc", "tpt-math-geometry/std", "tpt-math-linalg-fixed/std", "tpt-math-numeric/std", "tpt-math-units/std"]
+
+[lints]
+workspace = true

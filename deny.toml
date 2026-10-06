@@ -1,0 +1,36 @@
+# cargo-deny configuration — license/dependency hygiene for tpt-perception.
+# Policy per spec.txt §2: only MIT, MIT/Apache-2.0 dual, or Apache-2.0
+# (with permitted permissive transitive licenses). Apache-2.0-only *wrap
+# targets* are banned by policy; pure permissive transitive tooling deps in
+# this list are limited to what the allow-list below admits.
+# See https://embarkstudios.github.io/cargo-deny/
+
+[advisories]
+version = 2
+yanked = "deny"
+
+[licenses]
+# Workspace crates are MIT OR Apache-2.0. Dependencies must be MIT or
+# Apache-2.0 or a compatible permissive license (BSD/ISC/Zlib/CC0/Unicode/MPL).
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-DFS-2016",
+    "Unicode-3.0",
+    "Zlib",
+    "CC0-1.0",
+    "MPL-2.0",
+]
+confidence-threshold = 0.9
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

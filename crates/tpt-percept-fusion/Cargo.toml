@@ -1,0 +1,41 @@
+[package]
+name = "tpt-percept-fusion"
+description = "Multi-sensor fusion for tpt-perception: timestamp interpolation and latency compensation, self-contained EKF/UKF, extrinsic calibration, covariance intersection, and robust fusion under sensor failure. no_std + alloc."
+readme = "README.md"
+keywords = ["fusion", "ekf", "ukf", "calibration", "no-std"]
+categories = ["science", "algorithms", "no-std"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[dependencies]
+tpt-percept-core = { workspace = true }
+tpt-math-linalg-dense = { workspace = true }
+tpt-math-linalg-fixed = { workspace = true }
+tpt-math-numeric = { workspace = true }
+tpt-math-units = { workspace = true }
+
+[features]
+default = ["std"]
+alloc = [
+    "tpt-percept-core/alloc",
+    "tpt-math-linalg-dense/alloc",
+    "tpt-math-linalg-fixed/alloc",
+    "tpt-math-numeric/alloc",
+    "tpt-math-units/alloc",
+]
+std = [
+    "alloc",
+    "tpt-percept-core/std",
+    "tpt-math-linalg-dense/std",
+    "tpt-math-linalg-fixed/std",
+    "tpt-math-numeric/std",
+    "tpt-math-units/std",
+]
+
+[lints]
+workspace = true

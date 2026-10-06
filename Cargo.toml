@@ -1,0 +1,62 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/tpt-percept-core",
+    "crates/tpt-percept-cloud",
+    "crates/tpt-percept-features",
+    "crates/tpt-percept-register",
+    "crates/tpt-percept-slam",
+    "crates/tpt-percept-fusion",
+    "crates/tpt-percept-map",
+    "crates/tpt-percept-verify",
+    "crates/tpt-perception",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.84"
+license = "MIT OR Apache-2.0"
+authors = ["TPT Solutions"]
+homepage = "https://github.com/tpt-solutions/tpt-perception"
+repository = "https://github.com/tpt-solutions/tpt-perception"
+
+[workspace.dependencies]
+# In-house perception crates.
+tpt-percept-core = { version = "0.1.0", path = "crates/tpt-percept-core", default-features = false }
+tpt-percept-cloud = { version = "0.1.0", path = "crates/tpt-percept-cloud", default-features = false }
+tpt-percept-features = { version = "0.1.0", path = "crates/tpt-percept-features", default-features = false }
+tpt-percept-register = { version = "0.1.0", path = "crates/tpt-percept-register", default-features = false }
+tpt-percept-slam = { version = "0.1.0", path = "crates/tpt-percept-slam", default-features = false }
+tpt-percept-fusion = { version = "0.1.0", path = "crates/tpt-percept-fusion", default-features = false }
+tpt-percept-map = { version = "0.1.0", path = "crates/tpt-percept-map", default-features = false }
+tpt-percept-verify = { version = "0.1.0", path = "crates/tpt-percept-verify" }
+# Sibling tpt-math workspace (path deps per spec: no C/C++ FFI, in-house or
+# MIT/Apache-compatible crates only). tpt-math is the same org's numeric
+# substrate; all of these crates are MIT OR Apache-2.0.
+# Versions match the sibling workspace; cargo-deny's wildcard ban requires
+# explicit version + path.
+tpt-math-geometry = { version = "0.1.1", path = "../tpt-math/crates/tpt-math-geometry", default-features = false }
+tpt-math-linalg-fixed = { version = "0.1.0", path = "../tpt-math/crates/tpt-math-linalg-fixed", default-features = false }
+tpt-math-linalg-dense = { version = "0.1.0", path = "../tpt-math/crates/tpt-math-linalg-dense", default-features = false }
+tpt-math-numeric = { version = "0.1.0", path = "../tpt-math/crates/tpt-math-numeric", default-features = false }
+tpt-math-units = { version = "0.1.0", path = "../tpt-math/crates/tpt-math-units", default-features = false }
+# Property-based testing for statistical verification of geometric invariants.
+# MIT OR Apache-2.0.
+proptest = "1.5"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+unsafe_op_in_unsafe_fn = "warn"
+missing_docs = "warn"
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }
+
+[workspace.lints.clippy]
+all = "warn"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+overflow-checks = true

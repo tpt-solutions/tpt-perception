@@ -1,0 +1,25 @@
+[package]
+name = "tpt-percept-cloud"
+description = "Point cloud processing for tpt-perception: sparse voxelization, filters (statistical/radius/pass-through), k-d trees, octrees, R-trees, and streaming pipelines. no_std + alloc."
+readme = "README.md"
+keywords = ["pointcloud", "lidar", "voxel", "kdtree", "no-std"]
+categories = ["science", "algorithms", "no-std"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[dependencies]
+tpt-percept-core = { workspace = true }
+tpt-math-numeric = { workspace = true }
+
+[features]
+default = ["std"]
+alloc = ["tpt-percept-core/alloc", "tpt-math-numeric/alloc"]
+std = ["alloc", "tpt-percept-core/std", "tpt-math-numeric/std"]
+
+[lints]
+workspace = true

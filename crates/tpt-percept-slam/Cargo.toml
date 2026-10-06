@@ -1,0 +1,44 @@
+[package]
+name = "tpt-percept-slam"
+description = "SLAM for tpt-perception: monocular/stereo visual odometry, LiDAR odometry, loop closure detection, and self-contained sparse pose graph optimization. no_std + alloc."
+readme = "README.md"
+keywords = ["slam", "odometry", "loop-closure", "pose-graph", "no-std"]
+categories = ["science", "algorithms", "no-std"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[dependencies]
+tpt-percept-core = { workspace = true }
+tpt-percept-cloud = { workspace = true }
+tpt-percept-features = { workspace = true }
+tpt-percept-register = { workspace = true }
+tpt-math-linalg-dense = { workspace = true }
+tpt-math-numeric = { workspace = true }
+
+[features]
+default = ["std"]
+alloc = [
+    "tpt-percept-core/alloc",
+    "tpt-percept-cloud/alloc",
+    "tpt-percept-features/alloc",
+    "tpt-percept-register/alloc",
+    "tpt-math-linalg-dense/alloc",
+    "tpt-math-numeric/alloc",
+]
+std = [
+    "alloc",
+    "tpt-percept-core/std",
+    "tpt-percept-cloud/std",
+    "tpt-percept-features/std",
+    "tpt-percept-register/std",
+    "tpt-math-linalg-dense/std",
+    "tpt-math-numeric/std",
+]
+
+[lints]
+workspace = true

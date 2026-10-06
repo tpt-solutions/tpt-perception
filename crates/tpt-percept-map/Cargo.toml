@@ -1,0 +1,26 @@
+[package]
+name = "tpt-percept-map"
+description = "Spatial mapping for tpt-perception: 2D/3D log-odds occupancy grids, TSDF voxel maps, signed distance fields, and semantic (labeled) maps. no_std + alloc."
+readme = "README.md"
+keywords = ["occupancy", "tsdf", "mapping", "sdf", "no-std"]
+categories = ["science", "algorithms", "no-std"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[dependencies]
+tpt-percept-core = { workspace = true }
+tpt-percept-cloud = { workspace = true }
+tpt-math-numeric = { workspace = true }
+
+[features]
+default = ["std"]
+alloc = ["tpt-percept-core/alloc", "tpt-percept-cloud/alloc", "tpt-math-numeric/alloc"]
+std = ["alloc", "tpt-percept-core/std", "tpt-percept-cloud/std", "tpt-math-numeric/std"]
+
+[lints]
+workspace = true

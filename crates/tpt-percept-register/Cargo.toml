@@ -1,0 +1,41 @@
+[package]
+name = "tpt-percept-register"
+description = "Point cloud registration for tpt-perception: ICP (point-to-point / point-to-plane), NDT, feature-based matching with RANSAC, branch-and-bound and 3D Hough global registration. no_std + alloc."
+readme = "README.md"
+keywords = ["icp", "ndt", "registration", "slam", "no-std"]
+categories = ["science", "algorithms", "no-std"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[dependencies]
+tpt-percept-core = { workspace = true }
+tpt-percept-cloud = { workspace = true }
+tpt-percept-features = { workspace = true }
+tpt-math-linalg-dense = { workspace = true }
+tpt-math-numeric = { workspace = true }
+
+[features]
+default = ["std"]
+alloc = [
+    "tpt-percept-core/alloc",
+    "tpt-percept-cloud/alloc",
+    "tpt-percept-features/alloc",
+    "tpt-math-linalg-dense/alloc",
+    "tpt-math-numeric/alloc",
+]
+std = [
+    "alloc",
+    "tpt-percept-core/std",
+    "tpt-percept-cloud/std",
+    "tpt-percept-features/std",
+    "tpt-math-linalg-dense/std",
+    "tpt-math-numeric/std",
+]
+
+[lints]
+workspace = true

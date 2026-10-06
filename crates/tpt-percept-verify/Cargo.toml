@@ -1,0 +1,27 @@
+[package]
+name = "tpt-percept-verify"
+description = "Verification harnesses for tpt-perception: proptest strategies for point clouds/transforms/noise, geometric invariant checks, and Kani bounded-model-checking proofs of critical spatial algorithms."
+readme = "README.md"
+keywords = ["verification", "proptest", "kani", "invariants", "property-testing"]
+categories = ["development-tools", "science"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[dependencies]
+tpt-percept-core = { workspace = true, features = ["std"] }
+tpt-percept-cloud = { workspace = true, features = ["std"] }
+tpt-percept-features = { workspace = true, features = ["std"] }
+tpt-percept-register = { workspace = true, features = ["std"] }
+tpt-percept-slam = { workspace = true, features = ["std"] }
+tpt-percept-fusion = { workspace = true, features = ["std"] }
+tpt-percept-map = { workspace = true, features = ["std"] }
+tpt-math-linalg-dense = { workspace = true, features = ["std"] }
+proptest = { workspace = true }
+
+[lints]
+workspace = true
