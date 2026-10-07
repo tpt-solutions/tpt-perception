@@ -2,8 +2,8 @@
 name = "tpt-perception"
 description = "Umbrella crate for tpt-perception: feature-gated re-exports of the perception crates (core, cloud, features, register, slam, fusion, map, verify)."
 readme = "README.md"
-keywords = ["perception", "slam", "lidar", "pointcloud", "robotics"]
-categories = ["science", "algorithms"]
+keywords = ["perception", "slam", "lidar", "pointcloud", "robotics", "umbrella", "sensor-fusion", "visual-odometry", "registration", "mapping", "verification"]
+categories = ["science", "algorithms", "robotics", "simulation", "computer-vision"]
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

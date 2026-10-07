@@ -2,8 +2,8 @@
 name = "tpt-percept-fusion"
 description = "Multi-sensor fusion for tpt-perception: timestamp interpolation and latency compensation, self-contained EKF/UKF, extrinsic calibration, covariance intersection, and robust fusion under sensor failure. no_std + alloc."
 readme = "README.md"
-keywords = ["fusion", "ekf", "ukf", "calibration", "no-std"]
-categories = ["science", "algorithms", "no-std"]
+keywords = ["fusion", "ekf", "ukf", "calibration", "no-std", "hand-eye", "covariance-intersection", "temporal-alignment", "latency-estimation", "sensor-fusion", "kalman-filter", "unscented-kalman-filter"]
+categories = ["science", "algorithms", "no-std", "robotics", "simulation", "control-systems"]
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

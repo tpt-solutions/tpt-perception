@@ -2,8 +2,8 @@
 name = "tpt-percept-slam"
 description = "SLAM for tpt-perception: monocular/stereo visual odometry, LiDAR odometry, loop closure detection, and self-contained sparse pose graph optimization. no_std + alloc."
 readme = "README.md"
-keywords = ["slam", "odometry", "loop-closure", "pose-graph", "no-std"]
-categories = ["science", "algorithms", "no-std"]
+keywords = ["slam", "odometry", "loop-closure", "pose-graph", "no-std", "visual-odometry", "lidar-odometry", "scan-context", "essential-matrix", "disparity-triangulation", "gauss-newton", "huber"]
+categories = ["science", "algorithms", "no-std", "robotics", "simulation", "computer-vision"]
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -2,8 +2,8 @@
 name = "tpt-percept-features"
 description = "Geometric feature extraction for tpt-perception: surface normals, curvature, PCA, Harris 3D corners, edge detection, RANSAC plane segmentation, FPFH and SHOT descriptors, learned-descriptor hooks. no_std + alloc."
 readme = "README.md"
-keywords = ["features", "normals", "fpfh", "shot", "no-std"]
-categories = ["science", "algorithms", "no-std"]
+keywords = ["features", "normals", "fpfh", "shot", "no-std", "harris3d", "curvature", "pca", "ransac", "plane-segmentation", "edge-detection", "descriptors", "learned-descriptors", "ai-native"]
+categories = ["science", "algorithms", "no-std", "robotics", "simulation", "computer-vision"]
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

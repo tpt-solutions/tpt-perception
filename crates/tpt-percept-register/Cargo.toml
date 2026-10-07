@@ -2,8 +2,8 @@
 name = "tpt-percept-register"
 description = "Point cloud registration for tpt-perception: ICP (point-to-point / point-to-plane), NDT, feature-based matching with RANSAC, branch-and-bound and 3D Hough global registration. no_std + alloc."
 readme = "README.md"
-keywords = ["icp", "ndt", "registration", "slam", "no-std"]
-categories = ["science", "algorithms", "no-std"]
+keywords = ["icp", "ndt", "registration", "slam", "no-std", "point-to-plane", "feature-matching", "ransac", "branch-and-bound", "hough", "loop-closure", "kabsch", "chen-medioni"]
+categories = ["science", "algorithms", "no-std", "robotics", "simulation", "computer-vision"]
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

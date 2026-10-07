@@ -2,8 +2,8 @@
 name = "tpt-percept-map"
 description = "Spatial mapping for tpt-perception: 2D/3D log-odds occupancy grids, TSDF voxel maps, signed distance fields, and semantic (labeled) maps. no_std + alloc."
 readme = "README.md"
-keywords = ["occupancy", "tsdf", "mapping", "sdf", "no-std"]
-categories = ["science", "algorithms", "no-std"]
+keywords = ["occupancy", "tsdf", "mapping", "sdf", "no-std", "log-odds", "signed-distance-field", "voxel-map", "semantic-map", "bresenham", "amanatides-woo", "surface-extraction"]
+categories = ["science", "algorithms", "no-std", "robotics", "simulation", "computer-graphics"]
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

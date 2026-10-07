@@ -2,8 +2,8 @@
 name = "tpt-percept-verify"
 description = "Verification harnesses for tpt-perception: proptest strategies for point clouds/transforms/noise, geometric invariant checks, and Kani bounded-model-checking proofs of critical spatial algorithms."
 readme = "README.md"
-keywords = ["verification", "proptest", "kani", "invariants", "property-testing"]
-categories = ["development-tools", "science"]
+keywords = ["verification", "proptest", "kani", "invariants", "property-testing", "bounded-model-checking", "geometric-invariants", "distance-preservation", "covariance-validity", "formal-verification"]
+categories = ["development-tools", "science", "testing", "formal-methods"]
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -2,8 +2,8 @@
 name = "tpt-percept-cloud"
 description = "Point cloud processing for tpt-perception: sparse voxelization, filters (statistical/radius/pass-through), k-d trees, octrees, R-trees, and streaming pipelines. no_std + alloc."
 readme = "README.md"
-keywords = ["pointcloud", "lidar", "voxel", "kdtree", "no-std"]
-categories = ["science", "algorithms", "no-std"]
+keywords = ["pointcloud", "lidar", "voxel", "kdtree", "no-std", "octree", "rtree", "filtering", "downsampling", "streaming", "spatial-index"]
+categories = ["science", "algorithms", "no-std", "robotics", "simulation", "data-structures"]
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

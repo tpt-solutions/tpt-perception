@@ -2,8 +2,8 @@
 name = "tpt-percept-core"
 description = "Foundation for tpt-perception: frame-typed 3D geometry, rigid body transforms, twists, and small dense linear algebra. no_std + alloc."
 readme = "README.md"
-keywords = ["perception", "geometry", "robotics", "lidar", "no-std"]
-categories = ["science", "algorithms", "no-std"]
+keywords = ["perception", "geometry", "robotics", "lidar", "no-std", "se3", "transform", "frame", "kabsch", "umeyama", "eigendecomposition", "linear-algebra"]
+categories = ["science", "algorithms", "no-std", "robotics", "simulation"]
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
