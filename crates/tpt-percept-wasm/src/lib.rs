@@ -11,14 +11,12 @@ use tpt_percept_cloud::voxel::voxel_downsample;
 use tpt_percept_register::icp::{icp, IcpParams, IcpVariant};
 
 fn to_cloud(flat: &[f64]) -> Result<PointCloud, JsValue> {
-    if flat.len() % 3 != 0 {
+    if !flat.len().is_multiple_of(3) {
         return Err(JsValue::from_str(
             "point array length must be a multiple of 3",
         ));
     }
-    Ok(PointCloud::from_points(
-        flat.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect(),
-    ))
+    Ok(PointCloud::from_points(flat.as_chunks::<3>().0.to_vec()))
 }
 
 fn flatten(points: &[[f64; 3]]) -> Vec<f64> {
