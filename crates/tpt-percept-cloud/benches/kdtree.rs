@@ -4,7 +4,9 @@
 //!
 //! Run with: `cargo bench -p tpt-percept-cloud`
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use std::hint::black_box;
+
+use criterion::{criterion_group, criterion_main, Criterion};
 
 use tpt_percept_cloud::kdtree::KdTree;
 
