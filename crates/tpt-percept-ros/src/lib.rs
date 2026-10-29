@@ -157,7 +157,7 @@ pub fn from_point_cloud2(
     if step == 0 {
         return Err(IoError::Format("point_step is zero".into()));
     }
-    if data.len() % step != 0 {
+    if !data.len().is_multiple_of(step) {
         return Err(IoError::Format(
             "data length is not a multiple of point_step".into(),
         ));
