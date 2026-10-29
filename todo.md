@@ -174,7 +174,7 @@ Applied to every crate below (referenced by name, not repeated per crate):
 ### 5.0 Blockers
 - [x] **(verified)** Workspace build fixed (`tpt-math` 0.2.0 pins).
 - [x] **Path dependencies removed.** `tpt-math` is on crates.io, so the workspace uses registry versions and CI no longer checks out a sibling repo.
-- [~] `.github/workflows/ci.yml`: fmt, clippy, test (Linux, Windows, macOS), examples, benches compile, doc, `no_std`, wasm, Python wheel and tests, MSRV 1.84, `cargo deny` (also weekly), and semver on pull requests. Not run on GitHub.
+- [~] `.github/workflows/ci.yml`: fmt, clippy, test (Linux, Windows, macOS), examples, benches compile, doc, `no_std`, wasm, Python wheel and tests, MSRV 1.88, `cargo deny` (also weekly), and semver on pull requests. Not run on GitHub.
 - [~] Weekly Kani job (`.github/workflows/kani.yml`). Not run.
 - [ ] `tpt-gis` WGS84/UTM checkpoint. Re-checked: the local crate is parcel GIS with no WGS84/UTM, so it stays blocked.
 

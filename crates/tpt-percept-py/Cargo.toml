@@ -16,6 +16,10 @@ publish = false
 [lib]
 name = "tpt_perception"
 crate-type = ["cdylib", "rlib"]
+# Shares its lib name with the `tpt-perception` umbrella crate; rustdoc
+# refuses to document two libs with the same name, and the umbrella is the
+# documented API.
+doc = false
 
 [features]
 # Enable when building the Python extension module (maturin does this).
