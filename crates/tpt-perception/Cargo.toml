@@ -38,3 +38,7 @@ full = ["default", "verify"]
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+# Examples read KITTI scans and write trajectories.
+tpt-percept-io = { workspace = true }

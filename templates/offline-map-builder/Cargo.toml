@@ -1,0 +1,10 @@
+[package]
+name = "{{project-name}}"
+version = "0.1.0"
+edition = "2021"
+description = "Offline surface map from KITTI scans: odometry, TSDF fusion, OBJ export"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+tpt-perception = "{{tpt_version}}"
+tpt-percept-io = "{{tpt_version}}"

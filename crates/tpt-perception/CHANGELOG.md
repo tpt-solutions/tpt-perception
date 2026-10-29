@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (Phase 5)
+- Examples: `icp_two_scans`, `plane_segmentation`, `kitti_lidar_odometry`, `pose_graph_loop_closure`, `ekf_imu_gps_fusion`, `occupancy_from_scans`, `tsdf_to_mesh`
+
 ### Added
 - Initial release of umbrella crate
 - Feature-gated re-exports of all perception sub-crates

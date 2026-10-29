@@ -1,0 +1,8 @@
+[template]
+cargo_generate_version = ">=0.18.0"
+description = "Hand-eye extrinsic calibration (Tsai-Lenz) from a CSV of synchronised motion pairs"
+
+[placeholders.tpt_version]
+type = "string"
+prompt = "tpt-perception version to depend on"
+default = "0.1"

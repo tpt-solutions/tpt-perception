@@ -1,0 +1,8 @@
+[book]
+title = "tpt-perception cookbook"
+authors = ["TPT Solutions"]
+language = "en"
+src = "."
+
+[build]
+build-dir = "../../target/book"

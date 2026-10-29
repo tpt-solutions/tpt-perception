@@ -1,0 +1,40 @@
+[package]
+name = "tpt-percept-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+tpt-percept-io = { path = "../crates/tpt-percept-io" }
+
+# Own workspace root so the fuzzing crate is not pulled into the main one.
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "pcd"
+path = "fuzz_targets/pcd.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "ply"
+path = "fuzz_targets/ply.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "kitti"
+path = "fuzz_targets/kitti.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "tum"
+path = "fuzz_targets/tum.rs"
+test = false
+doc = false

@@ -1,0 +1,10 @@
+[package]
+name = "{{project-name}}"
+version = "0.1.0"
+edition = "2021"
+description = "LiDAR odometry over KITTI-format scans, built on tpt-perception"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+tpt-perception = "{{tpt_version}}"
+tpt-percept-io = "{{tpt_version}}"

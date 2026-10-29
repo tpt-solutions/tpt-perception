@@ -1,0 +1,8 @@
+[template]
+cargo_generate_version = ">=0.18.0"
+description = "Offline surface map: LiDAR odometry over KITTI scans, then TSDF fusion and mesh export"
+
+[placeholders.tpt_version]
+type = "string"
+prompt = "tpt-perception version to depend on"
+default = "0.1"

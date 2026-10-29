@@ -1,0 +1,8 @@
+[template]
+cargo_generate_version = ">=0.18.0"
+description = "LiDAR odometry over a directory of KITTI-format scans"
+
+[placeholders.tpt_version]
+type = "string"
+prompt = "tpt-perception version to depend on"
+default = "0.1"
