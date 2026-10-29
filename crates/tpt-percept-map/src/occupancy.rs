@@ -109,7 +109,12 @@ impl OccupancyGrid2D {
 
     /// Inserts one ray: from `origin` to `hit` (the measured reflection
     /// point). Cells along the ray are marked free, the hit cell occupied.
+    ///
+    /// Rays with a non-finite endpoint are ignored.
     pub fn insert_ray(&mut self, origin: [f64; 2], hit: [f64; 2]) {
+        if !origin.iter().chain(hit.iter()).all(|v| v.is_finite()) {
+            return;
+        }
         for (cell, hit_cell) in self.ray_cells(origin, hit) {
             let update = if hit_cell {
                 self.params.hit_log_odds
@@ -204,8 +209,12 @@ impl OccupancyGrid3D {
         log_odds_to_probability(self.cells.get(&self.cell_of(p)).copied().unwrap_or(0.0))
     }
 
-    /// Inserts a ray with the Amanatides–Woo voxel traversal.
+    /// Inserts a ray with the Amanatides–Woo voxel traversal. Rays with a
+    /// non-finite endpoint are ignored.
     pub fn insert_ray(&mut self, origin: [f64; 3], hit: [f64; 3]) {
+        if !origin.iter().chain(hit.iter()).all(|v| v.is_finite()) {
+            return;
+        }
         for (cell, hit_cell) in self.ray_cells(origin, hit) {
             let update = if hit_cell {
                 self.params.hit_log_odds
@@ -370,5 +379,20 @@ mod tests {
             let back = (p / (1.0 - p)).ln();
             assert!((back - l).abs() < 1e-9);
         }
+    }
+}
+
+#[cfg(test)]
+mod nonfinite_tests {
+    use super::*;
+
+    #[test]
+    fn non_finite_rays_are_ignored() {
+        let mut g2 = OccupancyGrid2D::new([0.0, 0.0], OccupancyParams::default());
+        g2.insert_ray([0.0, 0.0], [f64::NAN, 1.0]);
+        assert!(g2.is_empty());
+        let mut g3 = OccupancyGrid3D::new([0.0; 3], OccupancyParams::default());
+        g3.insert_ray([0.0; 3], [1.0, f64::INFINITY, 0.0]);
+        assert!(g3.is_empty());
     }
 }

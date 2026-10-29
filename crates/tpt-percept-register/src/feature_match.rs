@@ -8,13 +8,11 @@
 //! back as the initial pose for fine registration (e.g. [`crate::icp::icp`]).
 #![allow(clippy::needless_range_loop)]
 
-use alloc::vec;
-use alloc::vec::Vec;
 #[cfg_attr(feature = "std", allow(unused_imports))]
-use tpt_math_numeric::Float as _;
-
 use crate::error::RegistrationError;
 use crate::icp::apply;
+use alloc::vec;
+use alloc::vec::Vec;
 use tpt_percept_cloud::cloud::PointCloud;
 use tpt_percept_core::align::kabsch_weighted;
 use tpt_percept_core::linalg3::det3;

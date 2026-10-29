@@ -15,11 +15,20 @@ repository.workspace = true
 [dependencies]
 tpt-percept-core = { workspace = true }
 tpt-math-numeric = { workspace = true }
+serde = { workspace = true, optional = true }
 
 [features]
 default = ["std"]
+serde = ["dep:serde"]
 alloc = ["tpt-percept-core/alloc", "tpt-math-numeric/alloc"]
 std = ["alloc", "tpt-percept-core/std", "tpt-math-numeric/std"]
+
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "kdtree"
+harness = false
 
 [lints]
 workspace = true

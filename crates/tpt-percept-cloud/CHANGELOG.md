@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (Phase 5)
+- `AttributedCloud`: intensity, timestamp and ring columns kept aligned through selection, transforms and merges
+- k-d tree and octree panic above `u32::MAX` points instead of wrapping indices
+
 ### Added
 - Initial release of point cloud processing crate
 - `PointCloud` and frame-tagged `FrameCloud<F>` containers

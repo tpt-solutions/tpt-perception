@@ -17,11 +17,15 @@
 #![forbid(unsafe_code)]
 
 extern crate alloc;
+#[cfg(feature = "rayon")]
+extern crate std;
 
 pub mod bnb;
+pub mod degeneracy;
 pub mod error;
 pub use error::RegistrationError;
 pub mod feature_match;
+pub mod gicp;
 pub mod hough;
 pub mod icp;
 pub mod ndt;
@@ -29,6 +33,7 @@ pub mod ndt;
 /// The types you almost always want in scope.
 pub mod prelude {
     pub use crate::bnb::{register_bnb, BnbParams, BnbResult};
+    pub use crate::degeneracy::Degeneracy;
     pub use crate::error::RegistrationError;
     pub use crate::feature_match::{
         match_descriptors, register_features, FeatureMatchParams, FeatureRegistration, Match,
@@ -36,6 +41,6 @@ pub mod prelude {
     pub use crate::hough::{
         extract_landmarks, hough_loop_closure, HoughParams, Landmark, LoopClosureCandidate,
     };
-    pub use crate::icp::{icp, IcpParams, IcpResult, IcpVariant};
+    pub use crate::icp::{icp, icp_prepared, IcpParams, IcpResult, IcpVariant, PreparedTarget};
     pub use crate::ndt::{build_ndt_map, ndt_register, NdtMap, NdtMapParams, NdtParams, NdtResult};
 }

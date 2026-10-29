@@ -1,11 +1,12 @@
-//! Pose graph optimization: dense Gauss–Newton over SE(3) poses with
+//! Pose graph optimization: dense Levenberg–Marquardt over SE(3) poses with
 //! numeric Jacobians.
 //!
 //! Nodes carry poses; edges carry *relative* pose measurements
 //! `T_ij ≈ T_i⁻¹ · T_j` (odometry, loop closure). The optimiser minimises
 //! `Σ ‖log(T_ij_meas⁻¹ · T_i⁻¹ T_j)‖²_{Ω}` — the SE(3) log residual with an
-//! optional Huber robustifier — by dense Gauss–Newton with left-multiplied
-//! perturbations.
+//! optional Huber robustifier — by damped Gauss–Newton with left-multiplied
+//! perturbations. Edges take a scalar weight or a full 6×6 information
+//! matrix.
 //!
 //! **Scale contract:** the solver is intentionally dense (O(n²) memory,
 //! numeric Jacobians) and targets graphs of up to a few hundred nodes —
@@ -17,7 +18,8 @@
 use alloc::vec;
 use alloc::vec::Vec;
 
-use tpt_math_linalg_dense::{DMatrix, DVector};
+use tpt_math_linalg_dense::DVector;
+use tpt_math_linalg_sparse::{CooMatrix, SparseCholesky};
 #[cfg_attr(feature = "std", allow(unused_imports))]
 use tpt_math_numeric::Float as _;
 
@@ -25,6 +27,7 @@ use crate::error::SlamError;
 
 /// A pose as `(R, t)` — `p_world = R · p_body + t`.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Pose {
     /// Rotation (proper orthonormal).
     pub rotation: [[f64; 3]; 3],
@@ -61,6 +64,18 @@ impl Pose {
             rotation: r_t,
             translation: scale3(mul_mat_vec(&r_t, self.translation), -1.0),
         }
+    }
+
+    /// SE(3) exponential of a tangent vector `ξ = (v, ω)`: the pose with
+    /// `exp(ξ) = Pose::identity().left_perturb(v, ω)`.
+    pub fn exp(xi: &[f64; 6]) -> Pose {
+        Pose::identity().left_perturb(&[xi[0], xi[1], xi[2]], &[xi[3], xi[4], xi[5]])
+    }
+
+    /// SE(3) logarithm: the tangent vector `ξ = (v, ω)` with
+    /// `Pose::exp(&ξ) == self`, up to numerical precision.
+    pub fn log(&self) -> [f64; 6] {
+        se3_log(self)
     }
 
     /// Left-multiplied SE(3) exponential perturbation: `self ← exp(ξ) · self`
@@ -101,6 +116,7 @@ impl Pose {
 
 /// A relative-pose constraint between two nodes.
 #[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PoseEdge {
     /// Source node.
     pub from: usize,
@@ -108,21 +124,42 @@ pub struct PoseEdge {
     pub to: usize,
     /// Measured relative pose `T_i⁻¹ · T_j`.
     pub relative: Pose,
-    /// Information scale (weight) — scalar multiple of the identity
-    /// information matrix.
+    /// Information scale (weight). The effective information is
+    /// `information · Ω`, where `Ω` is [`Self::information_matrix`] or the
+    /// identity when that is `None`.
     pub information: f64,
+    /// Optional full 6×6 information matrix `Ω` over the tangent ordering
+    /// `(v, ω)`. Must be symmetric; typically the inverse of the
+    /// registration covariance.
+    pub information_matrix: Option<[[f64; 6]; 6]>,
     /// Huber robustifier delta (0 disables robustification).
     pub huber_delta: f64,
 }
 
+/// Outcome of [`PoseGraph::optimize`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct OptimizeReport {
+    /// Outer iterations executed.
+    pub iterations: u32,
+    /// True when the cost reached the tolerance or was (numerically) zero.
+    /// False means the iteration cap was hit or the solver stalled.
+    pub converged: bool,
+    /// Cost before optimisation.
+    pub initial_cost: f64,
+    /// Cost after optimisation.
+    pub final_cost: f64,
+}
+
 /// Optimizer settings.
 #[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PoseGraphParams {
     /// Maximum Gauss–Newton iterations.
     pub max_iterations: u32,
     /// Stop when the total cost decreases by less than this (relative).
     pub tolerance: f64,
-    /// Central-difference step for numeric Jacobians.
+    /// Forward-difference step for numeric Jacobians.
     pub numeric_step: f64,
 }
 
@@ -181,6 +218,15 @@ impl PoseGraph {
                 "information must be finite and >= 0",
             ));
         }
+        if let Some(omega) = edge.information_matrix {
+            let finite = omega.iter().flatten().all(|v| v.is_finite());
+            let symmetric = (0..6).all(|r| (0..r).all(|c| omega[r][c] == omega[c][r]));
+            if !finite || !symmetric {
+                return Err(SlamError::InvalidParameter(
+                    "information_matrix must be finite and symmetric",
+                ));
+            }
+        }
         self.edges.push(edge);
         Ok(())
     }
@@ -195,131 +241,355 @@ impl PoseGraph {
         self.edges.get(index)
     }
 
-    /// Total squared (Huber-weighted) constraint cost.
+    /// Total Huber-weighted, information-weighted squared constraint cost.
     pub fn cost(&self) -> f64 {
-        self.edges
-            .iter()
-            .map(|e| {
-                let r = self.residual(e);
-                let mut w = e.information;
-                if e.huber_delta > 0.0 {
-                    let n = norm6(r);
-                    if n > e.huber_delta {
-                        w *= e.huber_delta / n;
-                    }
-                }
-                w * dot6(r, r)
-            })
-            .sum()
+        total_cost(&self.edges, &self.poses)
     }
 
-    /// SE(3) log residual of an edge (tangent vector, 6 components).
-    fn residual(&self, edge: &PoseEdge) -> [f64; 6] {
-        let ti = &self.poses[edge.from];
-        let tj = &self.poses[edge.to];
-        // e = log( T_ij_meas⁻¹ · T_i⁻¹ T_j ).
-        let measured_inv = edge.relative.inverse();
-        let actual = ti.inverse().compose(tj);
-        let err = measured_inv.compose(&actual);
-        se3_log(&err)
-    }
-
-    /// Runs dense Gauss–Newton optimization (node 0 is held fixed).
-    pub fn optimize(&mut self, params: &PoseGraphParams) -> Result<usize, SlamError> {
-        if self.poses.is_empty() {
-            return Ok(0);
-        }
+    /// Runs Levenberg–Marquardt Gauss–Newton over the free nodes (node 0 is
+    /// held fixed).
+    ///
+    /// The normal equations are assembled as a sparse matrix and solved with a
+    /// sparse Cholesky factorisation, so cost scales with the graph's sparsity
+    /// rather than with `(6N)²`. A step is accepted only when it lowers the
+    /// cost; otherwise the damping is raised and the step recomputed. The graph
+    /// is never cloned: only the pose vector is copied per trial step.
+    ///
+    /// Returns an [`OptimizeReport`]. Failure to converge (iteration cap, or
+    /// no descent at any damping level) is reported through
+    /// [`OptimizeReport::converged`] rather than as an error.
+    pub fn optimize(&mut self, params: &PoseGraphParams) -> Result<OptimizeReport, SlamError> {
+        let initial_cost = self.cost();
+        let mut report = OptimizeReport {
+            iterations: 0,
+            converged: false,
+            initial_cost,
+            final_cost: initial_cost,
+        };
         let n = self.poses.len();
-        let mut iterations = 0usize;
+        if n < 2 || self.edges.is_empty() {
+            report.converged = true;
+            return Ok(report);
+        }
+        let dim = 6 * (n - 1);
+        // Bandwidth-reducing order of the free nodes: keeps Cholesky fill low,
+        // especially for loop closures that would otherwise couple the two
+        // ends of a long chain.
+        let pos = reverse_cuthill_mckee(n, &self.edges);
+        let mut cost = initial_cost;
+        let mut lambda = LM_INITIAL_DAMPING;
 
         for _ in 0..params.max_iterations {
-            iterations += 1;
-            let dim = 6 * (n - 1); // node 0 is the fixed anchor
-            let mut h_flat = vec![0.0f64; dim * dim];
-            let mut g_flat = vec![0.0f64; dim];
+            // Stop once the cost is negligible relative to where we started.
+            // Scaling by the initial cost keeps the test meaningful when the
+            // residual is already at round-off level.
+            let floor = (params.tolerance * initial_cost).max(ABSOLUTE_COST_FLOOR);
+            if cost <= floor {
+                report.converged = true;
+                break;
+            }
+            report.iterations += 1;
+            let (h, rhs) = self.normal_equations(params.numeric_step, dim, &pos);
+            let rhs = DVector::from_row_slice(&rhs);
+            let diag = diagonal_of(&h);
 
-            for edge in &self.edges {
-                // Numeric Jacobian of the 6-vector residual wrt the left
-                // perturbation (v, ω) of both endpoint poses:
-                // jac[residual row][12 columns = (node, dof)].
-                let r0 = self.residual(edge);
-                let mut jac = [[0.0f64; 12]; 6];
-                for k in 0..6 {
-                    for (which, &node) in [edge.from, edge.to].iter().enumerate() {
-                        let step = params.numeric_step;
-                        let mut dir = [0.0f64; 6];
-                        dir[k] = step;
-                        let mut plus = self.clone();
-                        let (v, w) = (&dir[0..3], &dir[3..6]);
-                        plus.poses[node] =
-                            self.poses[node].left_perturb(&[v[0], v[1], v[2]], &[w[0], w[1], w[2]]);
-                        let rp = plus.residual(edge);
-                        for row in 0..6 {
-                            jac[row][which * 6 + k] = (rp[row] - r0[row]) / step;
-                        }
-                    }
-                }
-
-                // Robust weight (Huber on the residual norm).
-                let mut weight = edge.information;
-                if edge.huber_delta > 0.0 {
-                    let nrm = norm6(r0);
-                    if nrm > edge.huber_delta {
-                        weight *= edge.huber_delta / nrm;
-                    }
-                }
-
-                // Accumulate H = Σ Jᵀ W J, g = Σ Jᵀ W r in free-block
-                // indexing: node 0 is anchored, free node i (≥ 1) occupies
-                // rows/cols (i−1)·6 … +6.
-                let global = |col: usize| -> Option<usize> {
-                    let node = if col < 6 { edge.from } else { edge.to };
-                    if node == 0 {
-                        None
-                    } else {
-                        Some((node - 1) * 6 + (col % 6))
-                    }
+            let mut accepted: Option<(Vec<Pose>, f64, f64)> = None;
+            for _ in 0..LM_MAX_TRIES {
+                let damped = damped_matrix(&h, &diag, lambda);
+                let solved = SparseCholesky::factor(&damped).and_then(|f| f.solve(&rhs));
+                let Ok(delta) = solved else {
+                    lambda *= LM_UP;
+                    continue;
                 };
-                for a_ in 0..12 {
-                    let Some(ga) = global(a_) else { continue };
-                    for b_ in 0..12 {
-                        let Some(gb) = global(b_) else { continue };
-                        let mut acc = 0.0;
-                        for r in 0..6 {
-                            acc += jac[r][a_] * jac[r][b_];
-                        }
-                        h_flat[ga * dim + gb] += weight * acc;
-                    }
-                    let mut acc = 0.0;
-                    for r in 0..6 {
-                        acc += jac[r][a_] * r0[r];
-                    }
-                    // Gauss–Newton descent: δ = −H⁻¹ (Σ Jᵀ W r).
-                    g_flat[ga] -= weight * acc;
+
+                let mut candidate = self.poses.clone();
+                let mut max_step = 0.0f64;
+                for node in 1..n {
+                    let base = pos[node] * 6;
+                    let v = [delta[base], delta[base + 1], delta[base + 2]];
+                    let w = [delta[base + 3], delta[base + 4], delta[base + 5]];
+                    candidate[node] = candidate[node].left_perturb(&v, &w);
+                    max_step = max_step.max(norm3(&v)).max(norm3(&w));
                 }
+                let new_cost = total_cost(&self.edges, &candidate);
+                if new_cost < cost {
+                    accepted = Some((candidate, new_cost, max_step));
+                    break;
+                }
+                lambda *= LM_UP;
             }
 
-            // Solve H δ = −g for the free nodes (0 is fixed).
-            let h = DMatrix::from_vec(dim, dim, h_flat);
-            let g = DVector::from_vec(g_flat);
-            let sol = match h.solve(&g) {
-                Ok(delta) => delta,
-                Err(_) => break, // singular: stop
+            let Some((poses, new_cost, max_step)) = accepted else {
+                break;
             };
-            let mut max_step = 0.0f64;
-            for node in 1..n {
-                let base = (node - 1) * 6; // free-block index of this node
-                let v = [sol[base], sol[base + 1], sol[base + 2]];
-                let w = [sol[base + 3], sol[base + 4], sol[base + 5]];
-                self.poses[node] = self.poses[node].left_perturb(&v, &w);
-                max_step = max_step.max(norm3(&v)).max(norm3(&w));
-            }
-            if max_step < 1e-12 {
+            let relative_decrease = (cost - new_cost) / cost;
+            self.poses = poses;
+            cost = new_cost;
+            lambda = (lambda * LM_DOWN).max(LM_MIN);
+
+            if relative_decrease < params.tolerance || max_step < 1e-12 {
+                report.converged = true;
                 break;
             }
         }
-        Ok(iterations)
+
+        report.final_cost = cost;
+        Ok(report)
     }
+
+    /// Accumulates the normal equations `H δ = rhs` over all edges as sparse
+    /// triplets, with node 0 removed. `rhs = −Σ Jᵀ Ω r` (Gauss–Newton descent).
+    /// Duplicate triplets are summed when the matrix is compressed.
+    fn normal_equations(&self, step: f64, dim: usize, pos: &[usize]) -> (CooMatrix<f64>, Vec<f64>) {
+        let mut rows: Vec<usize> = Vec::new();
+        let mut cols: Vec<usize> = Vec::new();
+        let mut vals: Vec<f64> = Vec::new();
+        let mut rhs = vec![0.0f64; dim];
+
+        for edge in &self.edges {
+            let pi = self.poses[edge.from];
+            let pj = self.poses[edge.to];
+            let r0 = residual_with(edge, &pi, &pj);
+
+            // Forward-difference Jacobian of the residual w.r.t. the left
+            // perturbation of both endpoints. Columns 0..6 belong to `from`,
+            // 6..12 to `to`.
+            let mut jac = [[0.0f64; 12]; 6];
+            for k in 0..6 {
+                let mut xi = [0.0f64; 6];
+                xi[k] = step;
+                let (v, w) = ([xi[0], xi[1], xi[2]], [xi[3], xi[4], xi[5]]);
+                let rp = residual_with(edge, &pi.left_perturb(&v, &w), &pj);
+                let rq = residual_with(edge, &pi, &pj.left_perturb(&v, &w));
+                for row in 0..6 {
+                    jac[row][k] = (rp[row] - r0[row]) / step;
+                    jac[row][6 + k] = (rq[row] - r0[row]) / step;
+                }
+            }
+
+            let weight = edge.information_block_scaled(&r0);
+            let wr = mat6_vec(&weight, r0);
+            let wj = mat6_times_jac(&weight, &jac);
+
+            let global = |col: usize| -> Option<usize> {
+                let node = if col < 6 { edge.from } else { edge.to };
+                if node == 0 {
+                    None
+                } else {
+                    Some(pos[node] * 6 + (col % 6))
+                }
+            };
+            for a in 0..12 {
+                let Some(ga) = global(a) else { continue };
+                for b in 0..12 {
+                    let Some(gb) = global(b) else { continue };
+                    let mut acc = 0.0;
+                    for r in 0..6 {
+                        acc += jac[r][a] * wj[r][b];
+                    }
+                    rows.push(ga);
+                    cols.push(gb);
+                    vals.push(acc);
+                }
+                let mut acc = 0.0;
+                for r in 0..6 {
+                    acc += jac[r][a] * wr[r];
+                }
+                rhs[ga] -= acc;
+            }
+        }
+        (CooMatrix::from_triplets(dim, dim, rows, cols, vals), rhs)
+    }
+}
+
+/// Reverse Cuthill–McKee ordering of the free nodes (node 0 is the fixed
+/// anchor and is excluded). Returns `pos`, where `pos[node]` is the node's
+/// rank in the ordering, so node `k` occupies rows `6·pos[k] … 6·pos[k] + 6`.
+/// Entry 0 of `pos` is unused.
+fn reverse_cuthill_mckee(n: usize, edges: &[PoseEdge]) -> Vec<usize> {
+    let mut adj: Vec<Vec<usize>> = vec![Vec::new(); n];
+    for e in edges {
+        if e.from != 0 && e.to != 0 && e.from != e.to {
+            adj[e.from].push(e.to);
+            adj[e.to].push(e.from);
+        }
+    }
+    let degree: Vec<usize> = adj.iter().map(|a| a.len()).collect();
+    let mut visited = vec![false; n];
+    visited[0] = true;
+    let mut order: Vec<usize> = Vec::with_capacity(n.saturating_sub(1));
+    // Start each connected component from its lowest-degree unvisited node.
+    let mut candidates: Vec<usize> = (1..n).collect();
+    candidates.sort_by_key(|&i| degree[i]);
+    for start in candidates {
+        if visited[start] {
+            continue;
+        }
+        visited[start] = true;
+        let mut queue = alloc::collections::VecDeque::new();
+        queue.push_back(start);
+        while let Some(u) = queue.pop_front() {
+            order.push(u);
+            let mut next: Vec<usize> = adj[u].iter().copied().filter(|&v| !visited[v]).collect();
+            next.sort_by_key(|&v| degree[v]);
+            next.dedup();
+            for v in next {
+                if !visited[v] {
+                    visited[v] = true;
+                    queue.push_back(v);
+                }
+            }
+        }
+    }
+    order.reverse();
+    let mut pos = vec![0usize; n];
+    for (rank, &node) in order.iter().enumerate() {
+        pos[node] = rank;
+    }
+    pos
+}
+
+/// Diagonal of a sparse matrix (duplicates already summed by `to_csr`).
+fn diagonal_of(h: &CooMatrix<f64>) -> Vec<f64> {
+    let csr = h.to_csr();
+    let mut diag = vec![0.0f64; csr.nrows()];
+    for (r, c, v) in csr.iter() {
+        if r == c {
+            diag[r] = *v;
+        }
+    }
+    diag
+}
+
+/// `H + λ · max(diag(H), floor)` as a compressed SPD matrix.
+fn damped_matrix(
+    h: &CooMatrix<f64>,
+    diag: &[f64],
+    lambda: f64,
+) -> tpt_math_linalg_sparse::CsrMatrix<f64> {
+    let base = h.to_csr();
+    let n = diag.len();
+    let mut rows: Vec<usize> = Vec::with_capacity(base.nnz() + n);
+    let mut cols: Vec<usize> = Vec::with_capacity(base.nnz() + n);
+    let mut vals: Vec<f64> = Vec::with_capacity(base.nnz() + n);
+    for (r, c, v) in base.iter() {
+        rows.push(r);
+        cols.push(c);
+        vals.push(*v);
+    }
+    for (i, d) in diag.iter().enumerate() {
+        rows.push(i);
+        cols.push(i);
+        vals.push(lambda * d.max(DIAG_FLOOR));
+    }
+    CooMatrix::from_triplets(n, n, rows, cols, vals).to_csr()
+}
+
+impl PoseEdge {
+    /// Effective 6×6 information `information · Ω` (Ω = `information_matrix`
+    /// or the identity), before any robust reweighting.
+    fn information_block(&self) -> [[f64; 6]; 6] {
+        let mut m = self.information_matrix.unwrap_or(IDENTITY6);
+        for row in m.iter_mut() {
+            for v in row.iter_mut() {
+                *v *= self.information;
+            }
+        }
+        m
+    }
+
+    /// [`Self::information_block`] further scaled by the Huber weight for
+    /// the residual `r`.
+    fn information_block_scaled(&self, r: &[f64; 6]) -> [[f64; 6]; 6] {
+        let mut m = self.information_block();
+        let scale = self.huber_scale(r);
+        for row in m.iter_mut() {
+            for v in row.iter_mut() {
+                *v *= scale;
+            }
+        }
+        m
+    }
+
+    /// Huber weight `δ / ‖r‖` beyond `δ` (1 inside, or when disabled).
+    fn huber_scale(&self, r: &[f64; 6]) -> f64 {
+        if self.huber_delta > 0.0 {
+            let n = norm6(*r);
+            if n > self.huber_delta {
+                return self.huber_delta / n;
+            }
+        }
+        1.0
+    }
+}
+
+const IDENTITY6: [[f64; 6]; 6] = [
+    [1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    [0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+    [0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+    [0.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+];
+
+/// Initial Levenberg–Marquardt damping (relative to the Hessian diagonal).
+const LM_INITIAL_DAMPING: f64 = 1e-4;
+/// Damping multiplier after a rejected step.
+const LM_UP: f64 = 10.0;
+/// Damping multiplier after an accepted step.
+const LM_DOWN: f64 = 0.1;
+/// Lower bound on damping.
+const LM_MIN: f64 = 1e-12;
+/// Damping retries per iteration before giving up on the iteration.
+const LM_MAX_TRIES: usize = 12;
+/// Diagonal floor so isolated nodes still yield a solvable system.
+const DIAG_FLOOR: f64 = 1e-9;
+/// Cost below which the graph is treated as exactly consistent.
+const ABSOLUTE_COST_FLOOR: f64 = 1e-20;
+
+/// Sum of edge costs `Σ s·rᵀ Ω r` at the given node poses.
+fn total_cost(edges: &[PoseEdge], poses: &[Pose]) -> f64 {
+    edges
+        .iter()
+        .map(|e| {
+            let r = residual_with(e, &poses[e.from], &poses[e.to]);
+            e.huber_scale(&r) * quad6(&e.information_block(), r)
+        })
+        .sum()
+}
+
+/// SE(3) log residual `log(T_ij_meas⁻¹ · T_i⁻¹ · T_j)` of an edge for the
+/// given endpoint poses.
+fn residual_with(edge: &PoseEdge, ti: &Pose, tj: &Pose) -> [f64; 6] {
+    let measured_inv = edge.relative.inverse();
+    let actual = ti.inverse().compose(tj);
+    se3_log(&measured_inv.compose(&actual))
+}
+
+fn mat6_vec(m: &[[f64; 6]; 6], v: [f64; 6]) -> [f64; 6] {
+    let mut out = [0.0f64; 6];
+    for r in 0..6 {
+        for c in 0..6 {
+            out[r] += m[r][c] * v[c];
+        }
+    }
+    out
+}
+
+fn mat6_times_jac(m: &[[f64; 6]; 6], j: &[[f64; 12]; 6]) -> [[f64; 12]; 6] {
+    let mut out = [[0.0f64; 12]; 6];
+    for r in 0..6 {
+        for c in 0..12 {
+            for k in 0..6 {
+                out[r][c] += m[r][k] * j[k][c];
+            }
+        }
+    }
+    out
+}
+
+fn quad6(m: &[[f64; 6]; 6], r: [f64; 6]) -> f64 {
+    dot6(r, mat6_vec(m, r))
 }
 
 /// SE(3) logarithm: tangent coordinates `(v, ω)` of `T`.
@@ -547,18 +817,21 @@ mod tests {
                     to: node_ids[j],
                     relative,
                     information: 1.0,
+                    information_matrix: None,
                     huber_delta: 0.0,
                 })
                 .unwrap();
         }
         let cost_before = graph.cost();
-        let iterations = graph.optimize(&PoseGraphParams::default()).unwrap();
+        let report = graph.optimize(&PoseGraphParams::default()).unwrap();
         let cost_after = graph.cost();
         assert!(
             cost_after < cost_before * 1e-3,
             "cost {cost_before} → {cost_after}"
         );
-        assert!(iterations > 0);
+        assert!(report.iterations > 0);
+        assert!(report.converged);
+        assert_eq!(report.final_cost, cost_after);
         // Node 0 fixed.
         assert_eq!(graph.pose(0), Some(&truth[0]));
     }
@@ -582,6 +855,7 @@ mod tests {
                     to: i + 1,
                     relative: step,
                     information: 1.0,
+                    information_matrix: None,
                     huber_delta: 0.0,
                 })
                 .unwrap();
@@ -594,6 +868,7 @@ mod tests {
                 to: 0,
                 relative: loop_rel,
                 information: 1.0,
+                information_matrix: None,
                 huber_delta: 0.0,
             })
             .unwrap();
@@ -608,6 +883,197 @@ mod tests {
         assert!(after < before * 0.1, "cost {before} → {after}");
     }
 
+    fn translation_pose(x: f64) -> Pose {
+        Pose {
+            translation: [x, 0.0, 0.0],
+            ..Pose::identity()
+        }
+    }
+
+    #[test]
+    fn matrix_information_matches_equivalent_scalar_weight() {
+        // Two conflicting measurements of node 1 from the fixed anchor:
+        // x = 1.0 with weight 100, x = 2.0 with weight 1. The optimum is the
+        // weighted mean (100·1 + 1·2) / 101.
+        let expected = (100.0 + 2.0) / 101.0;
+
+        let solve_with = |heavy: PoseEdge, light: PoseEdge| {
+            let mut g = PoseGraph::new();
+            g.add_node(Pose::identity());
+            g.add_node(translation_pose(0.0));
+            g.add_edge(heavy).unwrap();
+            g.add_edge(light).unwrap();
+            g.optimize(&PoseGraphParams::default()).unwrap();
+            g.pose(1).unwrap().translation[0]
+        };
+
+        let scalar = solve_with(
+            PoseEdge {
+                from: 0,
+                to: 1,
+                relative: translation_pose(1.0),
+                information: 100.0,
+                information_matrix: None,
+                huber_delta: 0.0,
+            },
+            PoseEdge {
+                from: 0,
+                to: 1,
+                relative: translation_pose(2.0),
+                information: 1.0,
+                information_matrix: None,
+                huber_delta: 0.0,
+            },
+        );
+        assert!((scalar - expected).abs() < 1e-6, "scalar {scalar}");
+
+        // Same weighting expressed as a full matrix, with the heavy edge's
+        // off-diagonal coupling ignored by a diagonal Ω.
+        let mut omega = [[0.0f64; 6]; 6];
+        for (i, row) in omega.iter_mut().enumerate() {
+            row[i] = 1.0;
+        }
+        let mut heavy_omega = omega;
+        heavy_omega[0][0] = 100.0;
+        let matrix = solve_with(
+            PoseEdge {
+                from: 0,
+                to: 1,
+                relative: translation_pose(1.0),
+                information: 1.0,
+                information_matrix: Some(heavy_omega),
+                huber_delta: 0.0,
+            },
+            PoseEdge {
+                from: 0,
+                to: 1,
+                relative: translation_pose(2.0),
+                information: 1.0,
+                information_matrix: Some(omega),
+                huber_delta: 0.0,
+            },
+        );
+        assert!((matrix - expected).abs() < 1e-6, "matrix {matrix}");
+    }
+
+    #[test]
+    fn isolated_node_still_solves_and_reports() {
+        // Node 2 has no edges: its columns are zero, damping keeps the
+        // system solvable and the connected part still converges.
+        let mut g = PoseGraph::new();
+        g.add_node(Pose::identity());
+        g.add_node(translation_pose(0.5));
+        g.add_node(translation_pose(3.0));
+        g.add_edge(PoseEdge {
+            from: 0,
+            to: 1,
+            relative: translation_pose(1.0),
+            information: 1.0,
+            information_matrix: None,
+            huber_delta: 0.0,
+        })
+        .unwrap();
+        let report = g.optimize(&PoseGraphParams::default()).unwrap();
+        assert!(report.final_cost <= report.initial_cost);
+        assert!(report.converged);
+        assert!((g.pose(1).unwrap().translation[0] - 1.0).abs() < 1e-6);
+        assert_eq!(g.pose(2).unwrap().translation[0], 3.0);
+    }
+
+    #[test]
+    fn iteration_cap_reports_not_converged() {
+        let mut g = PoseGraph::new();
+        g.add_node(Pose::identity());
+        g.add_node(translation_pose(0.5));
+        g.add_edge(PoseEdge {
+            from: 0,
+            to: 1,
+            relative: translation_pose(1.0),
+            information: 1.0,
+            information_matrix: None,
+            huber_delta: 0.0,
+        })
+        .unwrap();
+        let report = g
+            .optimize(&PoseGraphParams {
+                max_iterations: 0,
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(!report.converged);
+        assert_eq!(report.iterations, 0);
+        assert_eq!(report.final_cost, report.initial_cost);
+    }
+
+    #[test]
+    fn large_ring_graph_converges_with_sparse_solver() {
+        // 150 poses on a circle, odometry edges between neighbours, a loop
+        // closure back to the start. Initial guesses drift by a small bias
+        // per step, so the optimiser has real work to do.
+        const N: usize = 150;
+        let point = |i: usize| {
+            let a = 2.0 * core::f64::consts::PI * i as f64 / N as f64;
+            Pose {
+                translation: [10.0 * a.cos(), 10.0 * a.sin(), 0.0],
+                ..Pose::identity()
+            }
+        };
+        let truth: Vec<Pose> = (0..=N).map(|i| point(i % N)).collect();
+
+        let mut graph = PoseGraph::new();
+        let mut estimate = Pose::identity();
+        graph.add_node(estimate);
+        for i in 0..N {
+            let relative = truth[i].inverse().compose(&truth[i + 1]);
+            // Drifting initial guess: the chain accumulates a bias.
+            let biased = Pose {
+                translation: [
+                    relative.translation[0] + 0.002,
+                    relative.translation[1],
+                    relative.translation[2],
+                ],
+                ..relative
+            };
+            estimate = estimate.compose(&biased);
+            graph.add_node(estimate);
+            graph
+                .add_edge(PoseEdge {
+                    from: i,
+                    to: i + 1,
+                    relative,
+                    information: 1.0,
+                    information_matrix: None,
+                    huber_delta: 0.0,
+                })
+                .unwrap();
+        }
+        // Loop closure: last node is the first.
+        graph
+            .add_edge(PoseEdge {
+                from: N,
+                to: 0,
+                relative: Pose::identity(),
+                information: 100.0,
+                information_matrix: None,
+                huber_delta: 0.0,
+            })
+            .unwrap();
+
+        let report = graph
+            .optimize(&PoseGraphParams {
+                max_iterations: 100,
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(report.converged, "{report:?}");
+        assert!(
+            report.final_cost < report.initial_cost * 1e-3,
+            "cost {} → {}",
+            report.initial_cost,
+            report.final_cost
+        );
+    }
+
     #[test]
     fn invalid_edges_rejected() {
         let mut graph = PoseGraph::new();
@@ -618,6 +1084,7 @@ mod tests {
                 to: 3,
                 relative: Pose::identity(),
                 information: 1.0,
+                information_matrix: None,
                 huber_delta: 0.0,
             })
             .is_err());

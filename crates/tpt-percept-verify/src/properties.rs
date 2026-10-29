@@ -66,6 +66,7 @@ proptest! {
             max_iterations: 25,
             tolerance: 1e-9,
             min_correspondences: 5,
+            huber_delta: 0.0,
         };
         let result = match icp(
             &source,
@@ -230,6 +231,7 @@ fn pose_graph_cycle_consistency() {
                 to: nodes[j],
                 relative,
                 information: 1.0,
+                information_matrix: None,
                 huber_delta: 0.0,
             })
             .unwrap();

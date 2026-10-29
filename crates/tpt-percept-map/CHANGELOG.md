@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (Phase 5)
+- `TsdfMap::extract_mesh` (marching tetrahedra with shared edge vertices)
+- `OccupancyGrid2D` and `3D` ignore rays with non-finite endpoints
+
 ### Added
 - Initial release of spatial mapping crate
 - 2D log-odds occupancy grids with Bresenham ray casting

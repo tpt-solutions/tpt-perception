@@ -20,6 +20,7 @@
 
 extern crate alloc;
 
+pub mod attributes;
 pub mod cloud;
 pub mod filter;
 pub mod kdtree;
@@ -30,6 +31,7 @@ pub mod voxel;
 
 /// The types you almost always want in scope.
 pub mod prelude {
+    pub use crate::attributes::{AttributeLengthError, AttributedCloud};
     pub use crate::cloud::{FrameCloud, PointCloud};
     pub use crate::filter::{pass_through, radius_filter, statistical_outlier_removal, Axis};
     pub use crate::kdtree::KdTree;

@@ -45,6 +45,18 @@ pub struct TsdfVoxel {
     pub weight: f64,
 }
 
+/// A triangle mesh extracted from a TSDF.
+///
+/// Vertices are shared between neighbouring triangles. Triangle winding is
+/// not guaranteed to be consistently oriented.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Mesh {
+    /// Vertex positions (metres).
+    pub vertices: Vec<[f64; 3]>,
+    /// Triangles as indices into [`Mesh::vertices`].
+    pub triangles: Vec<[u32; 3]>,
+}
+
 /// A TSDF voxel map (sparse, anchored at the first integration's origin).
 #[derive(Clone, Debug, Default)]
 pub struct TsdfMap {
@@ -198,6 +210,135 @@ impl TsdfMap {
         Some(acc)
     }
 
+    /// Extracts a triangle mesh of the zero level set with marching
+    /// tetrahedra.
+    ///
+    /// Each cube formed by eight neighbouring observed voxel centres is split
+    /// into six tetrahedra along a shared diagonal, which keeps adjacent cubes
+    /// consistent. Cubes with any unobserved corner are skipped. Edge
+    /// vertices are shared across cubes, so the mesh has no duplicate
+    /// vertices along seams.
+    pub fn extract_mesh(&self) -> Mesh {
+        // Corner offsets of a unit cube, indexed 0..8.
+        const CORNER: [[i64; 3]; 8] = [
+            [0, 0, 0],
+            [1, 0, 0],
+            [1, 1, 0],
+            [0, 1, 0],
+            [0, 0, 1],
+            [1, 0, 1],
+            [1, 1, 1],
+            [0, 1, 1],
+        ];
+        // Six monotone paths from corner 0 to corner 6 (Kuhn split).
+        const TETS: [[usize; 4]; 6] = [
+            [0, 1, 5, 6],
+            [0, 1, 2, 6],
+            [0, 3, 2, 6],
+            [0, 3, 7, 6],
+            [0, 4, 7, 6],
+            [0, 4, 5, 6],
+        ];
+
+        let mut mesh = Mesh::default();
+        let mut edge_vertex: BTreeMap<([i64; 3], [i64; 3]), u32> = BTreeMap::new();
+        let size = self.params.voxel_size;
+        let centre = |key: [i64; 3]| {
+            [
+                self.origin[0] + (key[0] as f64 + 0.5) * size,
+                self.origin[1] + (key[1] as f64 + 0.5) * size,
+                self.origin[2] + (key[2] as f64 + 0.5) * size,
+            ]
+        };
+
+        for base in self.voxels.keys() {
+            let mut keys = [[0i64; 3]; 8];
+            let mut values = [0.0f64; 8];
+            let mut complete = true;
+            for (c, off) in CORNER.iter().enumerate() {
+                let key = [base[0] + off[0], base[1] + off[1], base[2] + off[2]];
+                match self.voxels.get(&key) {
+                    Some(v) => {
+                        keys[c] = key;
+                        values[c] = v.sdf;
+                    }
+                    None => {
+                        complete = false;
+                        break;
+                    }
+                }
+            }
+            if !complete {
+                continue;
+            }
+
+            for tet in TETS {
+                let inside: Vec<usize> = tet.iter().copied().filter(|&c| values[c] < 0.0).collect();
+                let outside: Vec<usize> =
+                    tet.iter().copied().filter(|&c| values[c] >= 0.0).collect();
+                let mut vertex_on = |a: usize, b: usize, mesh: &mut Mesh| -> u32 {
+                    let (ka, kb) = (keys[a], keys[b]);
+                    let edge = if ka <= kb { (ka, kb) } else { (kb, ka) };
+                    if let Some(&idx) = edge_vertex.get(&edge) {
+                        return idx;
+                    }
+                    let (va, vb) = (values[a], values[b]);
+                    let t = if (va - vb).abs() > 1e-12 {
+                        (va / (va - vb)).clamp(0.0, 1.0)
+                    } else {
+                        0.5
+                    };
+                    let (pa, pb) = (centre(ka), centre(kb));
+                    let p = [
+                        pa[0] + t * (pb[0] - pa[0]),
+                        pa[1] + t * (pb[1] - pa[1]),
+                        pa[2] + t * (pb[2] - pa[2]),
+                    ];
+                    let idx =
+                        u32::try_from(mesh.vertices.len()).expect("mesh exceeds u32::MAX vertices");
+                    mesh.vertices.push(p);
+                    edge_vertex.insert(edge, idx);
+                    idx
+                };
+
+                match (inside.len(), outside.len()) {
+                    (1, 3) => {
+                        let lone = inside[0];
+                        let tri = [
+                            vertex_on(lone, outside[0], &mut mesh),
+                            vertex_on(lone, outside[1], &mut mesh),
+                            vertex_on(lone, outside[2], &mut mesh),
+                        ];
+                        mesh.triangles.push(tri);
+                    }
+                    (3, 1) => {
+                        let lone = outside[0];
+                        let tri = [
+                            vertex_on(lone, inside[0], &mut mesh),
+                            vertex_on(lone, inside[1], &mut mesh),
+                            vertex_on(lone, inside[2], &mut mesh),
+                        ];
+                        mesh.triangles.push(tri);
+                    }
+                    (2, 2) => {
+                        let (a, b) = (inside[0], inside[1]);
+                        let (c, d) = (outside[0], outside[1]);
+                        let quad = [
+                            vertex_on(a, c, &mut mesh),
+                            vertex_on(a, d, &mut mesh),
+                            vertex_on(b, d, &mut mesh),
+                            vertex_on(b, c, &mut mesh),
+                        ];
+                        mesh.triangles.push([quad[0], quad[1], quad[2]]);
+                        mesh.triangles.push([quad[0], quad[2], quad[3]]);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        mesh
+    }
+
     /// Extracts the zero-crossing surface as points: for every observed
     /// voxel whose SDF changes sign against any forward neighbour (the 13
     /// neighbours with lexicographically greater keys — axis, face- and
@@ -277,6 +418,55 @@ mod tests {
                 "surface point {p:?} off the plane"
             );
         }
+    }
+
+    #[test]
+    fn plane_mesh_is_flat_and_nonempty() {
+        let params = TsdfParams {
+            voxel_size: 0.02,
+            truncation: 0.06,
+            max_weight: 100.0,
+        };
+        let mut map = TsdfMap::new(params);
+        let mut points = Vec::new();
+        for x in -20..=20i32 {
+            for y in -20..=20i32 {
+                points.push([x as f64 * 0.01, y as f64 * 0.01, 1.0]);
+            }
+        }
+        map.integrate_scan([0.0; 3], &points).unwrap();
+
+        let mesh = map.extract_mesh();
+        assert!(!mesh.triangles.is_empty(), "no triangles");
+        for v in &mesh.vertices {
+            assert!(
+                (v[2] - 1.0).abs() < params.voxel_size,
+                "vertex {v:?} off plane"
+            );
+        }
+        // Every index is in range and vertices are not duplicated along the
+        // shared edges between cubes.
+        for tri in &mesh.triangles {
+            for &i in tri {
+                assert!((i as usize) < mesh.vertices.len());
+            }
+        }
+        let mut seen = alloc::collections::BTreeSet::new();
+        for v in &mesh.vertices {
+            let key = [
+                (v[0] * 1e6).round() as i64,
+                (v[1] * 1e6).round() as i64,
+                (v[2] * 1e6).round() as i64,
+            ];
+            assert!(seen.insert(key), "duplicate vertex {v:?}");
+        }
+    }
+
+    #[test]
+    fn empty_map_gives_empty_mesh() {
+        let map = TsdfMap::new(TsdfParams::default());
+        let mesh = map.extract_mesh();
+        assert!(mesh.vertices.is_empty() && mesh.triangles.is_empty());
     }
 
     #[test]

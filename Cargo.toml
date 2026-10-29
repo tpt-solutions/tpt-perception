@@ -31,19 +31,25 @@ tpt-percept-slam = { version = "0.1.0", path = "crates/tpt-percept-slam", defaul
 tpt-percept-fusion = { version = "0.1.0", path = "crates/tpt-percept-fusion", default-features = false }
 tpt-percept-map = { version = "0.1.0", path = "crates/tpt-percept-map", default-features = false }
 tpt-percept-verify = { version = "0.1.0", path = "crates/tpt-percept-verify" }
-# Sibling tpt-math workspace (path deps per spec: no C/C++ FFI, in-house or
-# MIT/Apache-compatible crates only). tpt-math is the same org's numeric
-# substrate; all of these crates are MIT OR Apache-2.0.
-# Versions match the sibling workspace; cargo-deny's wildcard ban requires
-# explicit version + path.
-tpt-math-geometry = { version = "0.1.1", path = "../tpt-math/crates/tpt-math-geometry", default-features = false }
-tpt-math-linalg-fixed = { version = "0.1.0", path = "../tpt-math/crates/tpt-math-linalg-fixed", default-features = false }
-tpt-math-linalg-dense = { version = "0.1.0", path = "../tpt-math/crates/tpt-math-linalg-dense", default-features = false }
-tpt-math-numeric = { version = "0.1.0", path = "../tpt-math/crates/tpt-math-numeric", default-features = false }
-tpt-math-units = { version = "0.1.0", path = "../tpt-math/crates/tpt-math-units", default-features = false }
+# Numeric substrate from crates.io (the same org's tpt-math workspace).
+# All MIT OR Apache-2.0.
+tpt-math-geometry = { version = "0.2.0", default-features = false }
+tpt-math-linalg-fixed = { version = "0.2.0", default-features = false }
+tpt-math-linalg-dense = { version = "0.2.0", default-features = false }
+tpt-math-numeric = { version = "0.2.0", default-features = false }
+tpt-math-units = { version = "0.1.0", default-features = false }
+tpt-math-linalg-sparse = { version = "0.2.0", default-features = false }
 # Property-based testing for statistical verification of geometric invariants.
 # MIT OR Apache-2.0.
 proptest = "1.5"
+# Optional: serialisation of clouds, graphs and results (`serde` feature).
+# MIT OR Apache-2.0. `no_std`-compatible with `alloc`.
+serde = { version = "1", default-features = false, features = ["derive", "alloc"] }
+# Optional: data-parallel correspondence search (`rayon` feature, std only).
+# MIT OR Apache-2.0.
+rayon = "1.10"
+# Benchmarks (dev-only). MIT OR Apache-2.0.
+criterion = { version = "0.5", default-features = false }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

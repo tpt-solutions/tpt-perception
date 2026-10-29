@@ -10,8 +10,8 @@
 //!   constant-velocity prediction ([`lidar_odometry`]).
 //! * **Loop closure** — Scan Context place recognition (ring-key screening,
 //!   azimuth-shift matching) ([`loop_closure`]).
-//! * **Pose graph** — dense Gauss–Newton over SE(3) with numeric Jacobians
-//!   and a Huber robustifier ([`pose_graph`]; large-scale sparse solving is
+//! * **Pose graph** — dense Levenberg–Marquardt over SE(3) with numeric
+//!   Jacobians, 6×6 information edges and a Huber robustifier ([`pose_graph`]; large-scale sparse solving is
 //!   the open `tpt-systems-optimisation` checkpoint).
 //!
 //! `no_std + alloc`.
@@ -21,7 +21,9 @@
 
 extern crate alloc;
 
+pub mod deskew;
 pub mod error;
+pub mod imu;
 pub mod lidar_odometry;
 pub mod loop_closure;
 pub mod pose_graph;
@@ -35,7 +37,7 @@ pub mod prelude {
     pub use crate::error::SlamError;
     pub use crate::lidar_odometry::{LidarOdometry, LidarOdometryParams, OdometryStep};
     pub use crate::loop_closure::{detect_loop, LoopCandidate, ScanContext, ScanContextParams};
-    pub use crate::pose_graph::{Pose, PoseEdge, PoseGraph, PoseGraphParams};
+    pub use crate::pose_graph::{OptimizeReport, Pose, PoseEdge, PoseGraph, PoseGraphParams};
     pub use crate::vo_mono::{
         estimate_motion_mono, MonoMotion, MonoParams, NormalizedCorrespondence,
     };

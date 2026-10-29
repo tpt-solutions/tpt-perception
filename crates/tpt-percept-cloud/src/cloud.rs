@@ -20,6 +20,7 @@ use tpt_percept_core::point::Point3D;
 /// Position `i` is `self[i]`; auxiliary per-point data (intensity, ring,
 /// timestamp) is kept by the caller indexed in parallel.
 #[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PointCloud {
     points: Vec<[f64; 3]>,
 }

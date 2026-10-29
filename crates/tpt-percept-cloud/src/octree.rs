@@ -10,7 +10,6 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 
 #[cfg_attr(feature = "std", allow(unused_imports))]
-use tpt_math_numeric::Float as _;
 
 /// A region octree built over a point slice.
 #[derive(Clone, Debug)]
@@ -67,6 +66,10 @@ impl Octree {
                 .max(f64::EPSILON * 4.0)
             * 1.000_001; // keep boundary points strictly inside
 
+        assert!(
+            points.len() <= u32::MAX as usize,
+            "Octree indexes at most u32::MAX points"
+        );
         let ids: Vec<u32> = (0..points.len() as u32).collect();
         let root = build(&points, ids, center, half, capacity, max_depth);
         Octree {

@@ -19,15 +19,19 @@ tpt-percept-features = { workspace = true }
 tpt-percept-register = { workspace = true }
 tpt-math-linalg-dense = { workspace = true }
 tpt-math-numeric = { workspace = true }
+tpt-math-linalg-sparse = { workspace = true }
+serde = { workspace = true, optional = true }
 
 [features]
 default = ["std"]
+serde = ["dep:serde"]
 alloc = [
     "tpt-percept-core/alloc",
     "tpt-percept-cloud/alloc",
     "tpt-percept-features/alloc",
     "tpt-percept-register/alloc",
     "tpt-math-linalg-dense/alloc",
+    "tpt-math-linalg-sparse/alloc",
     "tpt-math-numeric/alloc",
 ]
 std = [
@@ -37,6 +41,7 @@ std = [
     "tpt-percept-features/std",
     "tpt-percept-register/std",
     "tpt-math-linalg-dense/std",
+    "tpt-math-linalg-sparse/std",
     "tpt-math-numeric/std",
 ]
 

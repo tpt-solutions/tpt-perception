@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (Phase 5)
+- Tests updated for the pose graph report and the ICP robust-kernel field
+
 ### Added
 - Initial release of verification harnesses crate
 - Proptest strategies: valid points, exact rotations, rigid transforms, point clouds, noise profiles, PSD covariances

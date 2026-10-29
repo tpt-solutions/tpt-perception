@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (Phase 5)
+- Generalised ICP (`gicp`) with normal-derived covariances
+- `PreparedTarget` and `icp_prepared` to reuse a target across calls
+- `icp_frames`: frame-typed ICP returning `Isometry3<From, To>`
+- Huber robust kernel (`IcpParams::huber_delta`)
+- `IcpParams::auto` derives the correspondence gate from the data
+- Covariance and degeneracy analysis on `IcpResult`
+- Optional `serde` and `rayon` features
+
 ### Added
 - Initial release of point cloud registration crate
 - ICP (Iterative Closest Point): point-to-point (Kabsch) and point-to-plane (Chen & Medioni) variants

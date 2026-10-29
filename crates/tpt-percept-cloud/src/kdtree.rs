@@ -10,7 +10,6 @@
 use alloc::vec::Vec;
 
 #[cfg_attr(feature = "std", allow(unused_imports))]
-use tpt_math_numeric::Float as _;
 
 /// Leaf bucket size: leaves hold at most this many point ids.
 const LEAF_SIZE: usize = 16;
@@ -39,7 +38,16 @@ enum KdNode {
 
 impl KdTree {
     /// Build a k-d tree over the given points (copies the slice).
+    ///
+    /// # Panics
+    ///
+    /// Panics if there are more than `u32::MAX` points: node and point ids are
+    /// stored as `u32`, and truncating them would silently corrupt the index.
     pub fn new(points: &[[f64; 3]]) -> KdTree {
+        assert!(
+            points.len() <= u32::MAX as usize,
+            "KdTree indexes at most u32::MAX points"
+        );
         let points = points.to_vec();
         let mut ids: Vec<u32> = (0..points.len() as u32).collect();
         let mut ordered = Vec::with_capacity(ids.len());

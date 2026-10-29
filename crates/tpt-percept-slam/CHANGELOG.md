@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (Phase 5)
+- Pose graph: Levenberg–Marquardt, sparse Cholesky with reverse Cuthill–McKee ordering, `OptimizeReport`, 6×6 information edges
+- LiDAR odometry: scan-to-map over a window, cached normals, `FrameLidarOdometry<S, O>`
+- Constant-velocity motion deskew (`deskew`)
+- IMU preintegration (`imu`)
+- Optional `serde` feature
+
 ### Added
 - Initial release of SLAM crate
 - Monocular visual odometry: normalized 8-point essential matrix with RANSAC

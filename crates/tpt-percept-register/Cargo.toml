@@ -18,9 +18,14 @@ tpt-percept-cloud = { workspace = true }
 tpt-percept-features = { workspace = true }
 tpt-math-linalg-dense = { workspace = true }
 tpt-math-numeric = { workspace = true }
+serde = { workspace = true, optional = true }
+rayon = { workspace = true, optional = true }
 
 [features]
 default = ["std"]
+serde = ["dep:serde", "tpt-percept-cloud/serde"]
+# Parallel correspondence search; implies std.
+rayon = ["std", "dep:rayon"]
 alloc = [
     "tpt-percept-core/alloc",
     "tpt-percept-cloud/alloc",
@@ -36,6 +41,13 @@ std = [
     "tpt-math-linalg-dense/std",
     "tpt-math-numeric/std",
 ]
+
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "icp"
+harness = false
 
 [lints]
 workspace = true
