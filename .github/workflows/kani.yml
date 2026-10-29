@@ -11,7 +11,7 @@ jobs:
   kani:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: model-checking/kani-github-action@v1
         with:
           args: -p tpt-percept-verify
