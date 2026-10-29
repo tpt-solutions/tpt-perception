@@ -1,0 +1,27 @@
+[package]
+name = "tpt-percept-cli"
+description = "Command-line tool for tpt-perception: convert, downsample, register and odometry over PCD, PLY and KITTI files."
+readme = "README.md"
+keywords = ["perception", "lidar", "pointcloud", "cli", "slam"]
+categories = ["command-line-utilities", "science", "robotics"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "tpt-percept"
+path = "src/main.rs"
+
+[dependencies]
+tpt-percept-cloud = { workspace = true, features = ["std"] }
+tpt-percept-features = { workspace = true, features = ["std"] }
+tpt-percept-io = { workspace = true }
+tpt-percept-register = { workspace = true, features = ["std"] }
+tpt-percept-slam = { workspace = true, features = ["std"] }
+
+[lints]
+workspace = true

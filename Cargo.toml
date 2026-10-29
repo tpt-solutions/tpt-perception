@@ -9,6 +9,8 @@ members = [
     "crates/tpt-percept-fusion",
     "crates/tpt-percept-map",
     "crates/tpt-percept-verify",
+    "crates/tpt-percept-io",
+    "crates/tpt-percept-cli",
     "crates/tpt-perception",
 ]
 
@@ -31,6 +33,8 @@ tpt-percept-slam = { version = "0.1.0", path = "crates/tpt-percept-slam", defaul
 tpt-percept-fusion = { version = "0.1.0", path = "crates/tpt-percept-fusion", default-features = false }
 tpt-percept-map = { version = "0.1.0", path = "crates/tpt-percept-map", default-features = false }
 tpt-percept-verify = { version = "0.1.0", path = "crates/tpt-percept-verify" }
+tpt-percept-io = { version = "0.1.0", path = "crates/tpt-percept-io" }
+tpt-percept-cli = { version = "0.1.0", path = "crates/tpt-percept-cli" }
 # Numeric substrate from crates.io (the same org's tpt-math workspace).
 # All MIT OR Apache-2.0.
 tpt-math-geometry = { version = "0.2.0", default-features = false }

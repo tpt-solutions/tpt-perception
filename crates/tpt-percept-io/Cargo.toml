@@ -1,0 +1,19 @@
+[package]
+name = "tpt-percept-io"
+description = "File I/O for tpt-perception: PCD, PLY, KITTI .bin point clouds and TUM trajectories. std-only (file access); the algorithm crates remain no_std."
+readme = "README.md"
+keywords = ["pointcloud", "pcd", "ply", "kitti", "tum", "lidar"]
+categories = ["science", "robotics", "parser-implementations"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[dependencies]
+tpt-percept-cloud = { workspace = true, features = ["std"] }
+
+[lints]
+workspace = true
