@@ -1,0 +1,19 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "tpt-perception"
+version = "0.1.0"
+description = "Pure-Rust 3D spatial perception: ICP, LiDAR odometry, plane segmentation, voxel filters and file I/O, exposed to Python."
+license = { text = "MIT OR Apache-2.0" }
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Scientific/Engineering",
+]
+
+[tool.maturin]
+features = ["extension-module"]
+module-name = "tpt_perception"

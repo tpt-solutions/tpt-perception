@@ -1,0 +1,25 @@
+[package]
+keywords = ["webassembly", "wasm", "icp", "pointcloud", "browser"]
+categories = ["science", "robotics", "wasm"]
+name = "tpt-percept-wasm"
+description = "WebAssembly bindings for tpt-perception: ICP and downsampling over flat Float64Arrays, with a browser demo."
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wasm-bindgen = "0.2"
+tpt-percept-cloud = { workspace = true, features = ["std"] }
+tpt-percept-register = { workspace = true, features = ["std"] }
+
+[lints]
+workspace = true

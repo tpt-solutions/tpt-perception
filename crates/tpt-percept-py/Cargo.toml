@@ -1,0 +1,37 @@
+[package]
+keywords = ["python", "pyo3", "lidar", "pointcloud", "bindings"]
+categories = ["science", "robotics", "api-bindings"]
+name = "tpt-percept-py"
+description = "Python bindings for tpt-perception (PyO3). The only FFI crate in the workspace; the algorithm crates stay FFI-free."
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+name = "tpt_perception"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# Enable when building the Python extension module (maturin does this).
+# Left off for `cargo test`, which needs to link against libpython.
+extension-module = ["pyo3/extension-module"]
+
+[dependencies]
+pyo3 = { version = "0.30", default-features = false, features = ["macros"] }
+tpt-percept-cloud = { workspace = true, features = ["std"] }
+tpt-percept-features = { workspace = true, features = ["std"] }
+tpt-percept-io = { workspace = true }
+tpt-percept-register = { workspace = true, features = ["std"] }
+tpt-percept-slam = { workspace = true, features = ["std"] }
+
+[lints.rust]
+# PyO3's macros expand to `unsafe` code; the workspace forbids unsafe in
+# first-party code, so this crate keeps the default lint levels.
+unsafe_code = "allow"
+missing_docs = "allow"

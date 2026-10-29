@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>tpt-perception ICP demo</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem auto; max-width: 42rem; padding: 0 1rem; line-height: 1.5; }
+    button { font-size: 1rem; padding: 0.5rem 1rem; }
+    pre { background: #f4f4f4; padding: 1rem; overflow-x: auto; border-radius: 6px; }
+    @media (prefers-color-scheme: dark) { pre { background: #1e1e1e; color: #ddd; } }
+  </style>
+</head>
+<body>
+  <h1>ICP in the browser</h1>
+  <p>
+    Builds a box surface, shifts it by a known offset, and recovers the offset with
+    point-to-point ICP. Everything runs in WebAssembly; no data leaves the page.
+  </p>
+  <label>Shift (m): <input id="shift" type="number" value="0.03" step="0.01"></label>
+  <button id="run" disabled>Run</button>
+  <pre id="out">Loading WebAssembly…</pre>
+
+  <script type="module">
+    // Built by `wasm-pack build --target web` in crates/tpt-percept-wasm.
+    import init, { align_point_to_point, demo_box } from "./pkg/tpt_percept_wasm.js";
+
+    const out = document.getElementById("out");
+    const button = document.getElementById("run");
+    const shiftInput = document.getElementById("shift");
+
+    try {
+      await init();
+      button.disabled = false;
+      out.textContent = "Ready.";
+    } catch (err) {
+      out.textContent = "Could not load the WebAssembly package. Build it first:\n" +
+        "  wasm-pack build crates/tpt-percept-wasm --target web\n\n" + err;
+    }
+
+    button.addEventListener("click", () => {
+      const target = demo_box(21);
+      const s = Number(shiftInput.value);
+      const source = new Float64Array(target.length);
+      for (let i = 0; i < target.length; i += 3) {
+        source[i] = target[i] + s;
+        source[i + 1] = target[i + 1];
+        source[i + 2] = target[i + 2];
+      }
+      const t0 = performance.now();
+      const r = align_point_to_point(source, target, 0.5);
+      const ms = performance.now() - t0;
+      const translation = r.slice(9, 12).map((v) => v.toFixed(5));
+      out.textContent =
+        `points: ${target.length / 3}\n` +
+        `expected translation: [${(-s).toFixed(5)}, 0, 0]\n` +
+        `recovered translation: [${translation.join(", ")}]\n` +
+        `rmse: ${r[12].toExponential(3)} m   fitness: ${r[13].toFixed(3)}\n` +
+        `converged: ${r[14] === 1}   iterations: ${r[15]}\n` +
+        `time: ${ms.toFixed(1)} ms`;
+    });
+  </script>
+</body>
+</html>

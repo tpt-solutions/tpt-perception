@@ -1,0 +1,20 @@
+[package]
+name = "tpt-percept-ros"
+description = "ROS 2 PointCloud2 byte-layout conversion for tpt-perception. Pure Rust, no ROS dependency; a rclrs node sits on top of it."
+readme = "README.md"
+keywords = ["ros2", "pointcloud2", "robotics", "lidar"]
+categories = ["science", "robotics"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[dependencies]
+tpt-percept-cloud = { workspace = true, features = ["std"] }
+tpt-percept-io = { workspace = true }
+
+[lints]
+workspace = true

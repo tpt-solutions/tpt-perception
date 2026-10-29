@@ -11,6 +11,9 @@ members = [
     "crates/tpt-percept-verify",
     "crates/tpt-percept-io",
     "crates/tpt-percept-cli",
+    "crates/tpt-percept-py",
+    "crates/tpt-percept-ros",
+    "crates/tpt-percept-wasm",
     "crates/tpt-perception",
 ]
 
