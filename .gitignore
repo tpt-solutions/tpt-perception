@@ -5,3 +5,10 @@ Cargo.lock
 .DS_Store
 Thumbs.db
 /.claude
+
+# Python wheels and build artefacts from maturin
+/crates/tpt-percept-py/dist/
+/crates/tpt-percept-py/build.log
+/fuzz/target/
+/fuzz/corpus/
+/fuzz/artifacts/

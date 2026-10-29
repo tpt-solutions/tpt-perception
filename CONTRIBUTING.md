@@ -2,11 +2,27 @@
 
 Thanks for helping build the TPT perception stack.
 
+## How to contribute: issues only
+
+Contributions are accepted **through GitHub issues only**. Please open an
+issue to report a bug, request a feature, or propose a change, describing the
+problem and the expected behaviour. Pull requests are not accepted, so please
+do not open one.
+
+Include in the issue:
+
+- the crate and version (or commit) you are using,
+- a minimal reproduction or a failing test, where possible,
+- the platform and Rust toolchain version.
+
+The maintainers decide whether and how a change lands. Any accepted fix is
+written by the maintainers.
+
 ## Ground rules (from spec.txt — these are enforced)
 
 1. **No external algorithm dependencies.** No PCL/Open3D/OpenCV FFI, no
    `nalgebra`/`faer` (Apache-2.0-only wrap targets, ADR-0007). Math comes
-   from in-house `tpt-math` crates (path deps) or is implemented here.
+   from the in-house `tpt-math` crates on crates.io or is implemented here.
 2. **Licensing.** Everything is MIT OR Apache-2.0. New dependencies must be
    in the `deny.toml` allow-list (`cargo deny check` must stay clean).
 3. **Frame safety.** Public APIs that touch geometry must be frame-typed

@@ -1,0 +1,17 @@
+name: Kani proofs
+
+# Bounded model checking is slow, so it runs weekly and on demand rather
+# than on every push.
+on:
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+jobs:
+  kani:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: model-checking/kani-github-action@v1
+        with:
+          args: -p tpt-percept-verify

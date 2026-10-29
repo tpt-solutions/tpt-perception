@@ -1,0 +1,24 @@
+name: Release-plz
+
+# Opens a release PR with version bumps and changelog entries on every push
+# to master. Publishing to crates.io happens only when that PR is merged.
+# Requires the CARGO_REGISTRY_TOKEN and RELEASE_PLZ_TOKEN repository secrets.
+on:
+  push:
+    branches: [master]
+
+jobs:
+  release-plz:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: MarcoIeni/release-plz-action@v0.5
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

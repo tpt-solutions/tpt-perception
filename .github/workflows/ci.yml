@@ -1,0 +1,144 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Weekly, so advisories published between pushes are still caught.
+    - cron: "0 6 * * 1"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace
+      - name: Optional features (serde, rayon)
+        run: cargo test -p tpt-percept-register -p tpt-percept-slam -p tpt-percept-cloud --features tpt-percept-register/rayon,tpt-percept-register/serde,tpt-percept-slam/serde,tpt-percept-cloud/serde
+
+  examples:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: |
+          for e in icp_two_scans plane_segmentation kitti_lidar_odometry \
+                   pose_graph_loop_closure ekf_imu_gps_fusion \
+                   occupancy_from_scans tsdf_to_mesh; do
+            cargo run -q -p tpt-perception --example "$e"
+          done
+
+  benches:
+    # Compiles the criterion benches so they cannot rot. Timing regressions
+    # need a stored baseline, which is not set up yet.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo bench --no-run -p tpt-percept-cloud -p tpt-percept-register
+
+  doc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+
+  no-std:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: |
+          for c in tpt-percept-core tpt-percept-cloud tpt-percept-features \
+                   tpt-percept-register tpt-percept-slam tpt-percept-fusion \
+                   tpt-percept-map; do
+            cargo build -p "$c" --no-default-features --features alloc
+          done
+
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - run: |
+          cargo check --target wasm32-unknown-unknown --no-default-features --features alloc \
+            -p tpt-percept-core -p tpt-percept-cloud -p tpt-percept-register -p tpt-percept-slam
+          cargo check -p tpt-percept-wasm --target wasm32-unknown-unknown
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build and install the extension
+        working-directory: crates/tpt-percept-py
+        run: |
+          python -m pip install maturin
+          maturin build --release -o dist
+          python -m pip install dist/*.whl
+      - name: Binding tests
+        run: python -m unittest discover -s crates/tpt-percept-py/tests -v
+
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.84
+      - run: cargo check --workspace --all-targets
+
+  deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+
+  semver:
+    # Only meaningful once a version has been published; the action compares
+    # against the latest crates.io release of each crate.
+    if: github.event_name == 'pull_request'
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: obi1kenobi/cargo-semver-checks-action@v2
+        with:
+          package: tpt-percept-core,tpt-percept-cloud,tpt-percept-features,tpt-percept-register,tpt-percept-slam,tpt-percept-fusion,tpt-percept-map
