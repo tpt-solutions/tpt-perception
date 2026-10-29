@@ -11,7 +11,9 @@
 //! Each format has a reader over `BufRead` (or a path wrapper) and a writer
 //! over `Write`, so the same code works on files, buffers and sockets.
 //! Intensity is returned alongside the geometry in [`LoadedCloud`] because
-//! [`PointCloud`] stores positions only.
+//! [`PointCloud`] stores positions only. To also get timestamp and ring
+//! columns from PCD and PLY, use [`read_pcd_attributed`] and
+//! [`read_ply_attributed`], which return an `AttributedCloud`.
 //!
 //! This crate uses `std` for file I/O; the algorithm crates stay `no_std`.
 
@@ -19,6 +21,7 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
 use std::path::Path;
 
+use tpt_percept_cloud::attributes::AttributedCloud;
 use tpt_percept_cloud::cloud::PointCloud;
 
 pub mod presets;
@@ -116,6 +119,18 @@ pub fn read_tum(path: impl AsRef<Path>) -> IoResult<Vec<TumPose>> {
     read_tum_from(BufReader::new(File::open(path)?))
 }
 
+/// Reads a PCD file from disk with every supported optional column; see
+/// [`read_pcd_attributed_from`].
+pub fn read_pcd_attributed(path: impl AsRef<Path>) -> IoResult<AttributedCloud> {
+    read_pcd_attributed_from(BufReader::new(File::open(path)?))
+}
+
+/// Reads a PLY file from disk with every supported optional column; see
+/// [`read_ply_attributed_from`].
+pub fn read_ply_attributed(path: impl AsRef<Path>) -> IoResult<AttributedCloud> {
+    read_ply_attributed_from(BufReader::new(File::open(path)?))
+}
+
 // ---------------------------------------------------------------------------
 // PCD
 // ---------------------------------------------------------------------------
@@ -134,8 +149,116 @@ struct PcdField {
     kind: ScalarType,
 }
 
-/// Reads a PCD stream (`ascii` or `binary` data).
-pub fn read_pcd_from<R: BufRead>(mut reader: R) -> IoResult<LoadedCloud> {
+/// Optional per-point columns shared by the PCD and PLY readers.
+///
+/// Each field holds the row index of that column, if the file has it.
+#[derive(Clone, Copy, Debug, Default)]
+struct ColumnIndex {
+    intensity: Option<usize>,
+    timestamp: Option<usize>,
+    ring: Option<usize>,
+}
+
+impl ColumnIndex {
+    /// Finds each optional column by name; `lookup` returns a field's row index.
+    fn find(lookup: impl Fn(&str) -> Option<usize>) -> Self {
+        ColumnIndex {
+            intensity: lookup("intensity"),
+            timestamp: lookup("timestamp").or_else(|| lookup("time")),
+            ring: lookup("ring"),
+        }
+    }
+
+    /// Keeps only intensity, for the [`LoadedCloud`] readers.
+    fn intensity_only(self) -> Self {
+        ColumnIndex {
+            timestamp: None,
+            ring: None,
+            ..self
+        }
+    }
+}
+
+/// Optional columns collected while reading rows.
+struct Columns {
+    index: ColumnIndex,
+    intensity: Option<Vec<f32>>,
+    timestamp: Option<Vec<f64>>,
+    ring: Option<Vec<u16>>,
+}
+
+impl Columns {
+    fn new(index: ColumnIndex, n: usize) -> Self {
+        Columns {
+            index,
+            intensity: index.intensity.map(|_| Vec::with_capacity(n)),
+            timestamp: index.timestamp.map(|_| Vec::with_capacity(n)),
+            ring: index.ring.map(|_| Vec::with_capacity(n)),
+        }
+    }
+
+    /// Appends one row. `value(i)` reads the row's `i`-th field as `f64`.
+    fn push(&mut self, value: impl Fn(usize) -> IoResult<f64>) -> IoResult<()> {
+        if let (Some(i), Some(list)) = (self.index.intensity, self.intensity.as_mut()) {
+            list.push(value(i)? as f32);
+        }
+        if let (Some(i), Some(list)) = (self.index.timestamp, self.timestamp.as_mut()) {
+            list.push(value(i)?);
+        }
+        if let (Some(i), Some(list)) = (self.index.ring, self.ring.as_mut()) {
+            list.push(ring_index(value(i)?)?);
+        }
+        Ok(())
+    }
+
+    /// Attaches the collected columns to `cloud`.
+    fn into_attributed(self, cloud: PointCloud) -> IoResult<AttributedCloud> {
+        let to_format =
+            |e: tpt_percept_cloud::attributes::AttributeLengthError| IoError::Format(e.to_string());
+        let mut out = AttributedCloud::new(cloud);
+        if let Some(values) = self.intensity {
+            out = out.with_intensity(values).map_err(to_format)?;
+        }
+        if let Some(values) = self.timestamp {
+            out = out.with_timestamp(values).map_err(to_format)?;
+        }
+        if let Some(values) = self.ring {
+            out = out.with_ring(values).map_err(to_format)?;
+        }
+        Ok(out)
+    }
+}
+
+/// Converts a stored ring value to `u16`, rejecting fractions and overflow.
+fn ring_index(value: f64) -> IoResult<u16> {
+    if value.fract() == 0.0 && (0.0..=f64::from(u16::MAX)).contains(&value) {
+        Ok(value as u16)
+    } else {
+        Err(IoError::Format(format!("ring index {value}")))
+    }
+}
+
+/// Reads a PCD stream (`ascii` or `binary` data) into positions and
+/// intensity. Timestamp and ring columns are skipped.
+pub fn read_pcd_from<R: BufRead>(reader: R) -> IoResult<LoadedCloud> {
+    let (cloud, cols) = parse_pcd(reader, false)?;
+    Ok(LoadedCloud {
+        cloud,
+        intensity: cols.intensity,
+    })
+}
+
+/// Reads a PCD stream (`ascii` or `binary` data) with every supported
+/// optional column: `intensity`, `timestamp` (or `time`) and `ring`.
+///
+/// A column that is present but holds a value that cannot be stored (such as
+/// a fractional or negative ring) is a [`IoError::Format`] error.
+pub fn read_pcd_attributed_from<R: BufRead>(reader: R) -> IoResult<AttributedCloud> {
+    let (cloud, cols) = parse_pcd(reader, true)?;
+    cols.into_attributed(cloud)
+}
+
+fn parse_pcd<R: BufRead>(mut reader: R, all_columns: bool) -> IoResult<(PointCloud, Columns)> {
     let mut names: Vec<String> = Vec::new();
     let mut sizes: Vec<usize> = Vec::new();
     let mut types: Vec<char> = Vec::new();
@@ -197,13 +320,14 @@ pub fn read_pcd_from<R: BufRead>(mut reader: R) -> IoResult<LoadedCloud> {
     let ix = field_index(&fields, "x")?;
     let iy = field_index(&fields, "y")?;
     let iz = field_index(&fields, "z")?;
-    let ii = fields.iter().position(|f| f.name == "intensity");
+    let mut index = ColumnIndex::find(|name| fields.iter().position(|f| f.name == name));
+    if !all_columns {
+        index = index.intensity_only();
+    }
     let n = points.unwrap_or(0);
 
-    let mut out = LoadedCloud {
-        cloud: PointCloud::with_capacity(n),
-        intensity: ii.map(|_| Vec::with_capacity(n)),
-    };
+    let mut cloud = PointCloud::with_capacity(n);
+    let mut cols = Columns::new(index, n);
 
     match data_kind.as_str() {
         "ascii" => {
@@ -217,10 +341,8 @@ pub fn read_pcd_from<R: BufRead>(mut reader: R) -> IoResult<LoadedCloud> {
                     return Err(IoError::Format("PCD ascii row has wrong arity".into()));
                 }
                 let value = |i: usize| parse_f64(tokens[i]);
-                out.cloud.push([value(ix)?, value(iy)?, value(iz)?]);
-                if let (Some(ii), Some(list)) = (ii, out.intensity.as_mut()) {
-                    list.push(value(ii)? as f32);
-                }
+                cloud.push([value(ix)?, value(iy)?, value(iz)?]);
+                cols.push(value)?;
             }
         }
         "binary" => {
@@ -235,10 +357,8 @@ pub fn read_pcd_from<R: BufRead>(mut reader: R) -> IoResult<LoadedCloud> {
             let offsets = field_offsets(&fields);
             for chunk in bytes.chunks_exact(stride).take(n) {
                 let read = |i: usize| decode(&chunk[offsets[i]..], &fields[i]);
-                out.cloud.push([read(ix)?, read(iy)?, read(iz)?]);
-                if let (Some(ii), Some(list)) = (ii, out.intensity.as_mut()) {
-                    list.push(read(ii)? as f32);
-                }
+                cloud.push([read(ix)?, read(iy)?, read(iz)?]);
+                cols.push(read)?;
             }
         }
         "binary_compressed" => {
@@ -246,7 +366,7 @@ pub fn read_pcd_from<R: BufRead>(mut reader: R) -> IoResult<LoadedCloud> {
         }
         other => return Err(IoError::Format(format!("PCD DATA {other:?}"))),
     }
-    Ok(out)
+    Ok((cloud, cols))
 }
 
 /// Writes a PCD stream with `x y z` and, when present, `intensity`.
@@ -414,8 +534,27 @@ impl PlyType {
     }
 }
 
-/// Reads the vertex element of a PLY stream.
-pub fn read_ply_from<R: BufRead>(mut reader: R) -> IoResult<LoadedCloud> {
+/// Reads the vertex element of a PLY stream into positions and intensity.
+/// Timestamp and ring properties are skipped.
+pub fn read_ply_from<R: BufRead>(reader: R) -> IoResult<LoadedCloud> {
+    let (cloud, cols) = parse_ply(reader, false)?;
+    Ok(LoadedCloud {
+        cloud,
+        intensity: cols.intensity,
+    })
+}
+
+/// Reads the vertex element of a PLY stream with every supported optional
+/// property: `intensity`, `timestamp` (or `time`) and `ring`.
+///
+/// A property that is present but holds a value that cannot be stored (such
+/// as a fractional or negative ring) is a [`IoError::Format`] error.
+pub fn read_ply_attributed_from<R: BufRead>(reader: R) -> IoResult<AttributedCloud> {
+    let (cloud, cols) = parse_ply(reader, true)?;
+    cols.into_attributed(cloud)
+}
+
+fn parse_ply<R: BufRead>(mut reader: R, all_columns: bool) -> IoResult<(PointCloud, Columns)> {
     let mut line = String::new();
     reader.read_line(&mut line)?;
     if line.trim() != "ply" {
@@ -458,12 +597,13 @@ pub fn read_ply_from<R: BufRead>(mut reader: R) -> IoResult<LoadedCloud> {
     let ix = index("x").ok_or_else(|| IoError::Format("PLY missing x".into()))?;
     let iy = index("y").ok_or_else(|| IoError::Format("PLY missing y".into()))?;
     let iz = index("z").ok_or_else(|| IoError::Format("PLY missing z".into()))?;
-    let ii = index("intensity");
+    let mut column_index = ColumnIndex::find(index);
+    if !all_columns {
+        column_index = column_index.intensity_only();
+    }
 
-    let mut out = LoadedCloud {
-        cloud: PointCloud::with_capacity(n),
-        intensity: ii.map(|_| Vec::with_capacity(n)),
-    };
+    let mut cloud = PointCloud::with_capacity(n);
+    let mut cols = Columns::new(column_index, n);
 
     match format.as_str() {
         "ascii" => {
@@ -476,14 +616,12 @@ pub fn read_ply_from<R: BufRead>(mut reader: R) -> IoResult<LoadedCloud> {
                 if tokens.len() != props.len() {
                     return Err(IoError::Format("PLY ascii row has wrong arity".into()));
                 }
-                out.cloud.push([
+                cloud.push([
                     parse_f64(tokens[ix])?,
                     parse_f64(tokens[iy])?,
                     parse_f64(tokens[iz])?,
                 ]);
-                if let (Some(ii), Some(list)) = (ii, out.intensity.as_mut()) {
-                    list.push(parse_f64(tokens[ii])? as f32);
-                }
+                cols.push(|i| parse_f64(tokens[i]))?;
             }
         }
         "binary_little_endian" => {
@@ -497,17 +635,14 @@ pub fn read_ply_from<R: BufRead>(mut reader: R) -> IoResult<LoadedCloud> {
             reader.read_exact(&mut bytes)?;
             let read = |row: &[u8], i: usize| props[i].1.decode_le(&row[offsets[i]..]);
             for row in bytes.chunks_exact(stride.max(1)).take(n) {
-                out.cloud
-                    .push([read(row, ix)?, read(row, iy)?, read(row, iz)?]);
-                if let (Some(ii), Some(list)) = (ii, out.intensity.as_mut()) {
-                    list.push(read(row, ii)? as f32);
-                }
+                cloud.push([read(row, ix)?, read(row, iy)?, read(row, iz)?]);
+                cols.push(|i| read(row, i))?;
             }
         }
         "binary_big_endian" => return Err(IoError::Unsupported("PLY big-endian")),
         other => return Err(IoError::Format(format!("PLY format {other:?}"))),
     }
-    Ok(out)
+    Ok((cloud, cols))
 }
 
 /// Writes a PLY stream with `x y z` and, when present, `intensity`.
@@ -733,5 +868,42 @@ mod tests {
     fn ply_rejects_list_properties() {
         let text = "ply\nformat ascii 1.0\nelement vertex 1\nproperty float x\nproperty float y\nproperty float z\nproperty list uchar int vertex_indices\nend_header\n";
         assert!(read_ply_from(Cursor::new(text.as_bytes())).is_err());
+    }
+
+    #[test]
+    fn pcd_attributed_reads_timestamp_and_ring() {
+        let text = "VERSION .7\nFIELDS x y z intensity timestamp ring\nSIZE 4 4 4 4 8 2\nTYPE F F F F F U\nCOUNT 1 1 1 1 1 1\nPOINTS 2\nDATA ascii\n1 2 3 0.5 10.25 7\n4 5 6 0.75 10.5 63\n";
+        let cloud = read_pcd_attributed_from(Cursor::new(text.as_bytes())).unwrap();
+        assert_eq!(cloud.len(), 2);
+        assert_eq!(cloud.intensity(), Some(&[0.5, 0.75][..]));
+        assert_eq!(cloud.timestamp(), Some(&[10.25, 10.5][..]));
+        assert_eq!(cloud.ring(), Some(&[7, 63][..]));
+    }
+
+    #[test]
+    fn pcd_loaded_reader_ignores_ring_values_it_does_not_use() {
+        // A fractional ring must not stop the intensity-only reader.
+        let text = "VERSION .7\nFIELDS x y z ring\nSIZE 4 4 4 4\nTYPE F F F F\nCOUNT 1 1 1 1\nPOINTS 1\nDATA ascii\n1 2 3 0.5\n";
+        let loaded = read_pcd_from(Cursor::new(text.as_bytes())).unwrap();
+        assert_eq!(loaded.cloud.len(), 1);
+        assert!(loaded.intensity.is_none());
+        assert!(read_pcd_attributed_from(Cursor::new(text.as_bytes())).is_err());
+    }
+
+    #[test]
+    fn ply_attributed_reads_ring_and_timestamp() {
+        let mut bytes = b"ply\nformat binary_little_endian 1.0\nelement vertex 2\nproperty float x\nproperty float y\nproperty float z\nproperty uchar ring\nproperty double timestamp\nend_header\n".to_vec();
+        for (ring, t) in [(3u8, 0.125f64), (15, 0.5)] {
+            for c in [1.0f32, 2.0, 3.0] {
+                bytes.extend_from_slice(&c.to_le_bytes());
+            }
+            bytes.push(ring);
+            bytes.extend_from_slice(&t.to_le_bytes());
+        }
+        let cloud = read_ply_attributed_from(Cursor::new(bytes)).unwrap();
+        assert_eq!(cloud.len(), 2);
+        assert_eq!(cloud.ring(), Some(&[3, 15][..]));
+        assert_eq!(cloud.timestamp(), Some(&[0.125, 0.5][..]));
+        assert!(cloud.intensity().is_none());
     }
 }

@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - TUM trajectory readers and writers
 - Bit-exact `TPTREC01` recordings for deterministic replay
 - Nominal sensor presets (Velodyne HDL-64E, VLP-16, Ouster OS1-64)
+- `read_pcd_attributed` / `read_ply_attributed` (and `_from` forms) return an
+  `AttributedCloud` with intensity, timestamp (`timestamp` or `time`) and ring
+  columns when the file has them
 
 ### Changed
 - N/A (initial release)

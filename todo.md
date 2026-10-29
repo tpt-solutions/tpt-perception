@@ -2,7 +2,7 @@
 
 > Pure-Rust, AI-native 3D spatial perception & sensor fusion library. Dual-licensed **MIT OR Apache-2.0**. © TPT Solutions. See [spec.txt](spec.txt) for the full design.
 
-**Status: Phases 0–4 complete; Phase 5 in progress.** All gates green: `cargo test --workspace` (239 tests),
+**Status: Phases 0–4 complete; Phase 5 in progress.** All gates green: `cargo test --workspace` (242 tests),
 `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --check`,
 `cargo doc --no-deps` (0 warnings), `cargo deny check` (advisories/bans/licenses/sources ok),
 `no_std + alloc` builds for all seven algorithm crates.
@@ -163,7 +163,7 @@ Applied to every crate below (referenced by name, not repeated per crate):
 > Legend: `[x]` done and checked by a gate in this session; `[~]` partly done
 > (the note says what is missing); `[ ]` not done, with the reason.
 >
-> Verification at time of writing: `cargo test --workspace` (239 Rust tests),
+> Verification at time of writing: `cargo test --workspace` (242 Rust tests),
 > `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --check`,
 > `cargo deny check`, `no_std + alloc` builds for seven algorithm crates,
 > `wasm32-unknown-unknown` checks, all seven examples run, benches and
@@ -192,7 +192,7 @@ Applied to every crate below (referenced by name, not repeated per crate):
 - [x] `icp_frames`: `FrameCloud<From>` and `FrameCloud<To>` in, `Isometry3<From, To>` out.
 - [x] `FrameLidarOdometry<S, O>`: frame-typed odometry; the untyped `LidarOdometry` is kept. Tested to match the untyped result exactly.
 - [x] `AttributedCloud`: intensity, timestamp and ring columns that stay aligned through `select`, transforms and `extend_from`.
-- [~] The file readers return intensity; they do not yet read ring or timestamp columns.
+- [x] PCD and PLY attributed readers (`read_pcd_attributed`, `read_ply_attributed`) return intensity, timestamp (`timestamp` or `time`) and ring columns in an `AttributedCloud`. The existing `LoadedCloud` readers still return intensity only, so their behaviour is unchanged. Writers do not yet emit the new columns.
 - [ ] `f32` storage. **Deferred, on my recommendation:** keep `f64` until a memory profile shows a need. Single precision would cost accuracy in the optimisers.
 - [x] `IcpParams::auto`.
 - [x] Optional `serde` feature on the main data and result types.

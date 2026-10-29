@@ -4,8 +4,8 @@ Reading and writing point clouds and trajectories for `tpt-perception`.
 
 | Format | Read | Write | Notes |
 |--------|------|-------|-------|
-| PCD (PCL) | ascii, binary | ascii, binary | `x y z` + optional `intensity`; `binary_compressed` rejected |
-| PLY | ascii, binary little-endian | ascii, binary little-endian | vertex element only; list properties rejected |
+| PCD (PCL) | ascii, binary | ascii, binary | `x y z` + optional `intensity`, `timestamp`/`time`, `ring`; `binary_compressed` rejected |
+| PLY | ascii, binary little-endian | ascii, binary little-endian | vertex element; optional `intensity`, `timestamp`/`time`, `ring`; list properties rejected |
 | KITTI odometry `.bin` | yes | yes | little-endian `f32` `x y z reflectance` |
 | TUM trajectory | yes | yes | `timestamp tx ty tz qx qy qz qw` |
 
@@ -17,4 +17,6 @@ println!("{} points", scan.cloud.len());
 ```
 
 Intensity is returned alongside the geometry in `LoadedCloud::intensity`,
-because `PointCloud` stores positions only.
+because `PointCloud` stores positions only. To also get timestamp and ring
+columns from PCD or PLY, use `read_pcd_attributed` or `read_ply_attributed`,
+which return an `AttributedCloud`.
